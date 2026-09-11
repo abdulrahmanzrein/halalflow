@@ -470,7 +470,7 @@ git commit -m "feat(flows): add the Flow contract and its pure helpers"
 
 **Interfaces:**
 - Consumes: `Flow`, `FlowInput` from `@/types/flow`; `sampleFlow`, `addDaysIso`, `isValidIsoDate` from `@/lib/flows/flow`.
-- Produces: `FlowStore` interface (`list(): Promise<Flow[]>`, `create(input: FlowInput): Promise<Flow>`, `remove(id: string): Promise<void>`); `createLocalStore(storage: Storage): FlowStore`; `readLegacyInvoices(storage: Storage): Flow[]` (non-destructive); `clearLegacyInvoices(storage: Storage): void`; `readCurrentId(storage: Storage): string | null`; `writeCurrentId(storage: Storage, id: string): void`; constants `KEY_FLOWS`, `KEY_CURRENT`.
+- Produces: `FlowStore` interface (`list(): Promise<Flow[]>`, `create(input: FlowInput): Promise<Flow>`, `remove(id: string): Promise<void>`); `createLocalStore(storage: Storage): FlowStore`; `readLegacyInvoices(storage: Storage): LegacyReadResult` where `LegacyReadResult = { flows: Flow[]; skipped: number }` (non-destructive); `clearLegacyInvoices(storage: Storage): void`; `readCurrentId(storage: Storage): string | null`; `writeCurrentId(storage: Storage, id: string): void`; constants `KEY_FLOWS`, `KEY_CURRENT`.
 
 **Why the migration is split into read and clear:** deleting the legacy keys inside the same call that returns the data means a failed write destroys the user's only copy. The store clears the old keys only after the new list is confirmed persisted.
 
@@ -640,7 +640,8 @@ describe("legacy invoices", () => {
       ]),
     });
 
-    const flows = readLegacyInvoices(storage);
+    const { flows, skipped } = readLegacyInvoices(storage);
+    expect(skipped).toBe(0);
     expect(flows).toHaveLength(2);
     expect(flows.every((f) => f.direction === "outgoing")).toBe(true);
     expect(flows[0].currency).toBe("USD");
@@ -654,7 +655,7 @@ describe("legacy invoices", () => {
     // JSON.stringify drops undefined keys, so this is a record without the field.
     const noDate = { ...oldInvoice, invoicedOn: undefined };
     const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(noDate) });
-    const [flow] = readLegacyInvoices(storage);
+    const [flow] = readLegacyInvoices(storage).flows;
     // Anchoring one end on today would let invoiced_on drift past due_on,
     // which parseFlowInput rejects as impossible.
     expect(flow.invoiced_on).toBe("2026-07-02"); // savedAt - 30 days
@@ -666,15 +667,27 @@ describe("legacy invoices", () => {
       "hedged:current-invoice": JSON.stringify(oldInvoice),
       "hedged:recent-invoices": JSON.stringify([oldInvoice]),
     });
-    expect(readLegacyInvoices(storage)).toHaveLength(1);
+    expect(readLegacyInvoices(storage).flows).toHaveLength(1);
   });
 
   it("reads without destroying, and clears only when asked", () => {
     const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(oldInvoice) });
-    expect(readLegacyInvoices(storage)).toHaveLength(1);
-    expect(readLegacyInvoices(storage)).toHaveLength(1); // reading is not destructive
+    expect(readLegacyInvoices(storage).flows).toHaveLength(1);
+    expect(readLegacyInvoices(storage).flows).toHaveLength(1); // reading is not destructive
     clearLegacyInvoices(storage);
-    expect(readLegacyInvoices(storage)).toHaveLength(0);
+    expect(readLegacyInvoices(storage).flows).toHaveLength(0);
+  });
+
+  it("counts an unconvertible record as skipped rather than dropping it silently", () => {
+    const storage = fakeStorage({
+      "hedged:recent-invoices": JSON.stringify([
+        oldInvoice,
+        { ...oldInvoice, id: "bad", label: 42 },
+      ]),
+    });
+    const { flows, skipped } = readLegacyInvoices(storage);
+    expect(flows).toHaveLength(1);
+    expect(skipped).toBe(1); // a non-string label fails isUsableFlow
   });
 
   it("migrates through the store and actually persists the result", async () => {
@@ -707,6 +720,28 @@ describe("legacy invoices", () => {
     const storage = fakeStorage({
       "hedged:current-invoice": JSON.stringify({ ...oldInvoice, amount: "9,000" }),
     });
+    await createLocalStore(storage).list();
+    expect(storage.getItem("hedged:current-invoice")).not.toBeNull();
+  });
+
+  it("does not clear the legacy keys after a partial migration", async () => {
+    // The good record migrates; the bad one must keep its only copy.
+    const storage = fakeStorage({
+      "hedged:recent-invoices": JSON.stringify([
+        oldInvoice,
+        { ...oldInvoice, id: "bad", amount: "9,000" },
+      ]),
+    });
+    const flows = await createLocalStore(storage).list();
+    expect(flows).toHaveLength(1);
+    expect(flows[0].label).toBe("Old invoice");
+    expect(storage.getItem("hedged:recent-invoices")).not.toBeNull();
+  });
+
+  it("treats a silently no-op setItem as a failed write", async () => {
+    const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(oldInvoice) });
+    storage.setItem = () => {}; // some privacy extensions do exactly this
+
     await createLocalStore(storage).list();
     expect(storage.getItem("hedged:current-invoice")).not.toBeNull();
   });
@@ -828,14 +863,24 @@ function readParsed(storage: Storage): { ok: boolean; flows: Flow[] } {
 
 /** Returns whether the data actually landed — callers must not assume it did. */
 function write(storage: Storage, flows: Flow[]): boolean {
+  const payload = JSON.stringify(flows);
   try {
-    storage.setItem(KEY_FLOWS, JSON.stringify(flows));
-    return true;
+    storage.setItem(KEY_FLOWS, payload);
+    // Some privacy extensions no-op setItem rather than throwing, so a
+    // missing exception is not proof. Read it back.
+    return storage.getItem(KEY_FLOWS) === payload;
   } catch {
     // Quota or private mode. The session still works from memory, but
     // nothing that depends on persistence may proceed.
     return false;
   }
+}
+
+export interface LegacyReadResult {
+  /** Records that converted cleanly and survive a storage round trip. */
+  flows: Flow[];
+  /** Records seen but not convertible. Non-zero means: do not clear the keys. */
+  skipped: number;
 }
 
 /**
@@ -844,9 +889,10 @@ function write(storage: Storage, flows: Flow[]): boolean {
  * only once the converted list is confirmed saved, because deleting them here
  * would destroy the user's only copy if that save then failed.
  */
-export function readLegacyInvoices(storage: Storage): Flow[] {
-  const out: Flow[] = [];
+export function readLegacyInvoices(storage: Storage): LegacyReadResult {
+  const flows: Flow[] = [];
   const seen = new Set<string>();
+  let skipped = 0;
 
   for (const key of [LEGACY_CURRENT, LEGACY_RECENT]) {
     try {
@@ -855,20 +901,31 @@ export function readLegacyInvoices(storage: Storage): Flow[] {
       const parsed: unknown = JSON.parse(raw);
       const list = (Array.isArray(parsed) ? parsed : [parsed]) as LegacyInvoice[];
       for (const inv of list) {
-        if (!inv?.id || seen.has(inv.id)) continue;
+        if (!inv?.id) {
+          skipped++;
+          continue;
+        }
+        if (seen.has(inv.id)) continue;
         seen.add(inv.id);
         try {
-          out.push(legacyToFlow(inv));
+          const flow = legacyToFlow(inv);
+          // Only a record that survives the round trip can justify deleting
+          // its original — anything else has to keep its legacy copy.
+          if (isUsableFlow(flow)) flows.push(flow);
+          else skipped++;
         } catch {
           // One ragged record must not cost the user the rest of the key.
+          skipped++;
         }
       }
     } catch {
-      // Unreadable or unparseable key — skip it and try the other one.
+      // Unreadable or unparseable key. It may hold records we never saw,
+      // so treat it as skipped rather than as nothing to migrate.
+      skipped++;
     }
   }
 
-  return out;
+  return { flows, skipped };
 }
 
 export function clearLegacyInvoices(storage: Storage): void {
@@ -907,14 +964,14 @@ export function createLocalStore(storage: Storage): FlowStore {
     const { ok, flows } = readParsed(storage);
     if (ok) return flows;
 
-    // Filter before trusting: a converted record that cannot survive a round
-    // trip (a "9,000" amount becomes NaN, then null) would be silently
-    // dropped on the next read — after the legacy keys were already cleared.
-    const migrated = readLegacyInvoices(storage).filter(isUsableFlow);
+    const { flows: migrated, skipped } = readLegacyInvoices(storage);
     const seeded = migrated.length > 0 ? migrated : [sampleFlow()];
-    // Drop the old keys only once the converted list is actually saved:
-    // a failed write here would otherwise erase the user's only copy.
-    if (write(storage, seeded) && migrated.length > 0) clearLegacyInvoices(storage);
+    // Clear the old keys only when the save landed AND every legacy record
+    // converted. Clearing after a partial migration would destroy the only
+    // copy of the records that did not make it across.
+    if (write(storage, seeded) && migrated.length > 0 && skipped === 0) {
+      clearLegacyInvoices(storage);
+    }
     return seeded;
   }
 
