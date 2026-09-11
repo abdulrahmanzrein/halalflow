@@ -5,7 +5,9 @@
  * and the cheapest: no contract, no conversion, no fee.
  * Pure: no React/Next imports. Suggestions only — we never execute anything.
  */
-export type FlowDirection = "outgoing" | "incoming";
+import type { FlowDirection } from "@/types/flow";
+
+export type { FlowDirection };
 
 export interface CurrencyFlow {
   id: string;
