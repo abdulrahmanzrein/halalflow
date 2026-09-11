@@ -141,7 +141,8 @@ describe("legacy invoices", () => {
       ]),
     });
 
-    const flows = readLegacyInvoices(storage);
+    const { flows, skipped } = readLegacyInvoices(storage);
+    expect(skipped).toBe(0);
     expect(flows).toHaveLength(2);
     expect(flows.every((f) => f.direction === "outgoing")).toBe(true);
     expect(flows[0].currency).toBe("USD");
@@ -155,7 +156,7 @@ describe("legacy invoices", () => {
     // JSON.stringify drops undefined keys, so this is a record without the field.
     const noDate = { ...oldInvoice, invoicedOn: undefined };
     const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(noDate) });
-    const [flow] = readLegacyInvoices(storage);
+    const [flow] = readLegacyInvoices(storage).flows;
     // Anchoring one end on today would let invoiced_on drift past due_on,
     // which parseFlowInput rejects as impossible.
     expect(flow.invoiced_on).toBe("2026-07-02"); // savedAt - 30 days
@@ -167,15 +168,27 @@ describe("legacy invoices", () => {
       "hedged:current-invoice": JSON.stringify(oldInvoice),
       "hedged:recent-invoices": JSON.stringify([oldInvoice]),
     });
-    expect(readLegacyInvoices(storage)).toHaveLength(1);
+    expect(readLegacyInvoices(storage).flows).toHaveLength(1);
   });
 
   it("reads without destroying, and clears only when asked", () => {
     const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(oldInvoice) });
-    expect(readLegacyInvoices(storage)).toHaveLength(1);
-    expect(readLegacyInvoices(storage)).toHaveLength(1); // reading is not destructive
+    expect(readLegacyInvoices(storage).flows).toHaveLength(1);
+    expect(readLegacyInvoices(storage).flows).toHaveLength(1); // reading is not destructive
     clearLegacyInvoices(storage);
-    expect(readLegacyInvoices(storage)).toHaveLength(0);
+    expect(readLegacyInvoices(storage).flows).toHaveLength(0);
+  });
+
+  it("counts an unconvertible record as skipped rather than dropping it silently", () => {
+    const storage = fakeStorage({
+      "hedged:recent-invoices": JSON.stringify([
+        oldInvoice,
+        { ...oldInvoice, id: "bad", label: 42 },
+      ]),
+    });
+    const { flows, skipped } = readLegacyInvoices(storage);
+    expect(flows).toHaveLength(1);
+    expect(skipped).toBe(1); // a non-string label fails isUsableFlow
   });
 
   it("migrates through the store and actually persists the result", async () => {
@@ -208,6 +221,28 @@ describe("legacy invoices", () => {
     const storage = fakeStorage({
       "hedged:current-invoice": JSON.stringify({ ...oldInvoice, amount: "9,000" }),
     });
+    await createLocalStore(storage).list();
+    expect(storage.getItem("hedged:current-invoice")).not.toBeNull();
+  });
+
+  it("does not clear the legacy keys after a partial migration", async () => {
+    // The good record migrates; the bad one must keep its only copy.
+    const storage = fakeStorage({
+      "hedged:recent-invoices": JSON.stringify([
+        oldInvoice,
+        { ...oldInvoice, id: "bad", amount: "9,000" },
+      ]),
+    });
+    const flows = await createLocalStore(storage).list();
+    expect(flows).toHaveLength(1);
+    expect(flows[0].label).toBe("Old invoice");
+    expect(storage.getItem("hedged:recent-invoices")).not.toBeNull();
+  });
+
+  it("treats a silently no-op setItem as a failed write", async () => {
+    const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(oldInvoice) });
+    storage.setItem = () => {}; // some privacy extensions do exactly this
+
     await createLocalStore(storage).list();
     expect(storage.getItem("hedged:current-invoice")).not.toBeNull();
   });
