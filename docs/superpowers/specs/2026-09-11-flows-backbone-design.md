@@ -70,7 +70,8 @@ create table public.flows (
   currency text not null,           -- foreign leg, e.g. 'EUR'
   home_currency text not null,      -- e.g. 'CAD'
   invoiced_on date not null,
-  days_until_due int not null default 21 check (days_until_due between 0 and 365),
+  -- A date, not a countdown: a stored "days until due" goes stale as time passes.
+  due_on date not null check (due_on >= invoiced_on),
   created_at timestamptz default now()
 );
 ```
@@ -81,6 +82,11 @@ application code.
 
 `scenarios` is dropped. No code path has ever written to it, so there is no data
 to migrate.
+
+`due_on` is a date rather than a `days_until_due` countdown because a stored
+countdown silently goes stale: enter a 21-day invoice, return a week later, and
+the app would still believe 21 days remain. The remaining window is derived by
+`daysUntilDue(flow)`.
 
 **Deliberately not stored:**
 
@@ -107,8 +113,8 @@ export interface Flow {
   amount: number;
   currency: string;       // foreign leg, "EUR"
   home_currency: string;  // "CAD"
-  invoiced_on: string;    // ISO date, "2026-09-11"
-  days_until_due: number;
+  invoiced_on: string;    // ISO date the invoice was issued, "2026-09-11"
+  due_on: string;         // ISO date the money is due; use daysUntilDue(flow)
   created_at: string;     // ISO timestamp
 }
 
@@ -176,7 +182,7 @@ incoming flow.
 |---------------|------------------|
 | `from`        | `currency`       |
 | `to`          | `home_currency`  |
-| `days`        | `days_until_due` |
+| `days`        | derived via `daysUntilDue(flow)` from `due_on` |
 | `invoicedOn`  | `invoiced_on`    |
 | `savedAt`     | `created_at`     |
 

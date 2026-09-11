@@ -64,7 +64,7 @@
 
 **Interfaces:**
 - Consumes: `MOCK_PROFILE` from `fxhedge/lib/fixtures.ts`; `CurrencyFlow` from `fxhedge/lib/natural-hedge.ts`.
-- Produces: `Flow`, `FlowInput`, `FlowDirection` (from `@/types/flow`); and from `@/lib/flows/flow`: `todayIsoDate(): string`, `isoDaysAgo(n: number): string`, `toPair(flow: Flow): string`, `flowToCurrencyFlow(flow: Flow): CurrencyFlow`, `parseFlowInput(body: unknown): FlowInput | null`, `pickCurrentFlow(flows: Flow[], selectedId: string | null): Flow | null`, `sampleFlow(): Flow`, `SAMPLE_FLOW_ID: string`, `CURRENCIES: readonly string[]`.
+- Produces: `Flow`, `FlowInput`, `FlowDirection` (from `@/types/flow`); and from `@/lib/flows/flow`: `todayIsoDate(): string`, `isoDaysAgo(n: number): string`, `addDaysIso(iso: string, n: number): string`, `isValidIsoDate(value: unknown): value is string`, `daysUntilDue(flow: Pick<Flow, "due_on">, today?: string): number`, `toPair(flow: Pick<Flow, "currency" | "home_currency">): string`, `flowToCurrencyFlow(flow: Flow): CurrencyFlow`, `parseFlowInput(body: unknown): FlowInput | null`, `pickCurrentFlow(flows: Flow[], selectedId: string | null): Flow | null`, `sampleFlow(): Flow`, `SAMPLE_FLOW_ID: string`, `CURRENCIES: readonly string[]`.
 
 - [ ] **Step 1: Create the type contract**
 
@@ -86,9 +86,14 @@ export interface Flow {
   currency: string;
   /** The business's own currency, e.g. "CAD". */
   home_currency: string;
-  /** ISO date, "2026-09-11". */
+  /** ISO date the invoice was issued, "2026-09-11". */
   invoiced_on: string;
-  days_until_due: number;
+  /**
+   * ISO date the money is due to move. Stored as a date, not a countdown:
+   * a stored "days until due" silently goes stale as time passes.
+   * Use `daysUntilDue(flow)` for the remaining window.
+   */
+  due_on: string;
   /** ISO timestamp. */
   created_at: string;
 }
@@ -107,6 +112,9 @@ import {
   pickCurrentFlow,
   toPair,
   flowToCurrencyFlow,
+  daysUntilDue,
+  addDaysIso,
+  isValidIsoDate,
 } from "../flows/flow";
 import type { Flow } from "@/types/flow";
 
@@ -119,7 +127,7 @@ function flow(over: Partial<Flow> = {}): Flow {
     currency: "EUR",
     home_currency: "CAD",
     invoiced_on: "2026-09-01",
-    days_until_due: 21,
+    due_on: "2026-09-22",
     created_at: "2026-09-01T00:00:00.000Z",
     ...over,
   };
@@ -132,7 +140,7 @@ const valid = {
   currency: "eur",
   home_currency: "cad",
   invoiced_on: "2026-09-01",
-  days_until_due: 21,
+  due_on: "2026-09-22",
 };
 
 describe("parseFlowInput", () => {
@@ -169,9 +177,23 @@ describe("parseFlowInput", () => {
     expect(parseFlowInput({ ...valid, invoiced_on: "01-09-2026" })).toBeNull();
   });
 
-  it("rejects an out-of-range due window", () => {
-    expect(parseFlowInput({ ...valid, days_until_due: 400 })).toBeNull();
-    expect(parseFlowInput({ ...valid, days_until_due: -1 })).toBeNull();
+  it("rejects impossible calendar dates that Date.parse silently rolls over", () => {
+    // Date.parse("2026-02-31T00:00:00Z") happily yields March 3rd.
+    expect(parseFlowInput({ ...valid, invoiced_on: "2026-02-31" })).toBeNull();
+    expect(parseFlowInput({ ...valid, due_on: "2026-04-31" })).toBeNull();
+    expect(parseFlowInput({ ...valid, due_on: "2026-13-01" })).toBeNull();
+  });
+
+  it("rejects a due date before the invoice date", () => {
+    expect(parseFlowInput({ ...valid, due_on: "2026-08-31" })).toBeNull();
+  });
+
+  it("rejects a window longer than a year", () => {
+    expect(parseFlowInput({ ...valid, due_on: "2027-10-01" })).toBeNull();
+  });
+
+  it("accepts a same-day due date", () => {
+    expect(parseFlowInput({ ...valid, due_on: "2026-09-01" })).not.toBeNull();
   });
 
   it("rejects non-objects", () => {
@@ -201,6 +223,35 @@ describe("pickCurrentFlow", () => {
     const out = flow({ id: "out" });
     const inc = flow({ id: "inc", direction: "incoming" });
     expect(pickCurrentFlow([out, inc], "inc")!.id).toBe("out");
+  });
+});
+
+describe("daysUntilDue", () => {
+  it("counts forward from the given day", () => {
+    expect(daysUntilDue(flow(), "2026-09-01")).toBe(21);
+    expect(daysUntilDue(flow(), "2026-09-15")).toBe(7);
+  });
+
+  it("floors at zero once the due date has passed", () => {
+    expect(daysUntilDue(flow(), "2026-10-01")).toBe(0);
+  });
+
+  it("does not go stale — the same flow shrinks as today advances", () => {
+    const f = flow();
+    expect(daysUntilDue(f, "2026-09-10")).toBeGreaterThan(daysUntilDue(f, "2026-09-20"));
+  });
+});
+
+describe("addDaysIso / isValidIsoDate", () => {
+  it("adds days across a month boundary", () => {
+    expect(addDaysIso("2026-09-25", 10)).toBe("2026-10-05");
+  });
+
+  it("rejects impossible dates and accepts real ones", () => {
+    expect(isValidIsoDate("2026-02-31")).toBe(false);
+    expect(isValidIsoDate("2026-02-28")).toBe(true);
+    expect(isValidIsoDate("nope")).toBe(false);
+    expect(isValidIsoDate(20260228)).toBe(false);
   });
 });
 
@@ -253,7 +304,36 @@ export function isoDaysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function toPair(flow: Flow): string {
+export function addDaysIso(iso: string, n: number): string {
+  const t = Date.parse(`${iso}T00:00:00Z`);
+  if (Number.isNaN(t)) return iso;
+  return new Date(t + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * `Date.parse` alone is not a date validator: it silently rolls "2026-02-31"
+ * forward to March 3rd. Round-tripping the parsed value back to a string is
+ * what actually rejects impossible calendar dates.
+ */
+export function isValidIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const t = Date.parse(`${value}T00:00:00Z`);
+  if (Number.isNaN(t)) return false;
+  return new Date(t).toISOString().slice(0, 10) === value;
+}
+
+/** Days from `today` until the flow is due, floored at 0. */
+export function daysUntilDue(
+  flow: Pick<Flow, "due_on">,
+  today: string = todayIsoDate(),
+): number {
+  const due = Date.parse(`${flow.due_on}T00:00:00Z`);
+  const now = Date.parse(`${today}T00:00:00Z`);
+  if (Number.isNaN(due) || Number.isNaN(now)) return 0;
+  return Math.max(0, Math.round((due - now) / 86_400_000));
+}
+
+export function toPair(flow: Pick<Flow, "currency" | "home_currency">): string {
   return `${flow.currency}-${flow.home_currency}`;
 }
 
@@ -283,12 +363,16 @@ export function parseFlowInput(body: unknown): FlowInput | null {
   if (!/^[A-Z]{3}$/.test(currency) || !/^[A-Z]{3}$/.test(home)) return null;
   if (currency === home) return null;
 
-  const invoicedOn = typeof b.invoiced_on === "string" ? b.invoiced_on : "";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(invoicedOn)) return null;
-  if (Number.isNaN(Date.parse(`${invoicedOn}T00:00:00Z`))) return null;
+  if (!isValidIsoDate(b.invoiced_on)) return null;
+  if (!isValidIsoDate(b.due_on)) return null;
+  const invoicedOn = b.invoiced_on;
+  const dueOn = b.due_on;
 
-  const days = Number(b.days_until_due);
-  if (!Number.isFinite(days) || days < 0 || days > 365) return null;
+  // A due date before the invoice date is always a mistake, and a window
+  // beyond a year is outside what the historical engines model.
+  const span = daysUntilDue({ due_on: dueOn }, invoicedOn);
+  if (Date.parse(`${dueOn}T00:00:00Z`) < Date.parse(`${invoicedOn}T00:00:00Z`)) return null;
+  if (span > 365) return null;
 
   const rawLabel = typeof b.label === "string" ? b.label.trim() : "";
   const label = rawLabel
@@ -304,7 +388,7 @@ export function parseFlowInput(body: unknown): FlowInput | null {
     currency,
     home_currency: home,
     invoiced_on: invoicedOn,
-    days_until_due: Math.round(days),
+    due_on: dueOn,
   };
 }
 
@@ -332,8 +416,11 @@ export function sampleFlow(): Flow {
     amount: MOCK_PROFILE.invoice_amount,
     currency: MOCK_PROFILE.supplier_currency,
     home_currency: MOCK_PROFILE.home_currency,
+    // Issued 21 days ago (the drift baseline) and due 21 days from today
+    // (the forward exposure window) — the two are independent now that the
+    // due date is stored rather than counted down from a stale number.
     invoiced_on: isoDaysAgo(MOCK_PROFILE.days_until_due),
-    days_until_due: MOCK_PROFILE.days_until_due,
+    due_on: addDaysIso(todayIsoDate(), MOCK_PROFILE.days_until_due),
     created_at: new Date().toISOString(),
   };
 }
@@ -342,7 +429,7 @@ export function sampleFlow(): Flow {
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `cd fxhedge; npx vitest run lib/__tests__/flow.test.ts`
-Expected: PASS, 13 tests.
+Expected: PASS, all tests in the file.
 
 - [ ] **Step 6: Remove the duplicate FlowDirection declaration**
 
@@ -456,7 +543,7 @@ describe("createLocalStore", () => {
       currency: "EUR",
       home_currency: "CAD",
       invoiced_on: "2026-09-01",
-      days_until_due: 30,
+      due_on: "2026-10-01",
     });
     expect(created.id).toBeTruthy();
     expect(created.created_at).toBeTruthy();
@@ -475,7 +562,7 @@ describe("createLocalStore", () => {
       currency: "EUR",
       home_currency: "CAD",
       invoiced_on: "2026-09-01",
-      days_until_due: 30,
+      due_on: "2026-10-01",
     });
     await store.remove(created.id);
     const flows = await store.list();
@@ -528,6 +615,8 @@ describe("migrateLegacy", () => {
     expect(flows[0].currency).toBe("USD");
     expect(flows[0].home_currency).toBe("CAD");
     expect(flows[0].invoiced_on).toBe("2026-08-01");
+    // 30 days counted from the day the old record was last saved.
+    expect(flows[0].due_on).toBe("2026-08-31");
   });
 
   it("de-duplicates an invoice present in both legacy keys", () => {
@@ -611,7 +700,7 @@ Create `fxhedge/lib/flows/local-store.ts`:
  */
 import type { Flow, FlowInput } from "@/types/flow";
 import type { FlowStore } from "./store";
-import { sampleFlow, isoDaysAgo } from "./flow";
+import { sampleFlow, isoDaysAgo, addDaysIso } from "./flow";
 
 export const KEY_FLOWS = "halalflow:flows";
 export const KEY_CURRENT = "halalflow:current-flow-id";
@@ -632,6 +721,7 @@ interface LegacyInvoice {
 
 function legacyToFlow(inv: LegacyInvoice): Flow {
   const days = Number.isFinite(inv.days) ? inv.days : 21;
+  const savedAt = inv.savedAt ?? new Date().toISOString();
   return {
     id: inv.id,
     direction: "outgoing", // the old model only ever stored payables
@@ -640,8 +730,10 @@ function legacyToFlow(inv: LegacyInvoice): Flow {
     currency: inv.from,
     home_currency: inv.to,
     invoiced_on: inv.invoicedOn ?? isoDaysAgo(days),
-    days_until_due: days,
-    created_at: inv.savedAt ?? new Date().toISOString(),
+    // The old model stored a countdown from whenever it was last saved, so
+    // that save date is the only honest anchor for the real due date.
+    due_on: addDaysIso(savedAt.slice(0, 10), days),
+    created_at: savedAt,
   };
 }
 
@@ -839,7 +931,7 @@ const validBody = {
   currency: "EUR",
   home_currency: "CAD",
   invoiced_on: "2026-09-01",
-  days_until_due: 21,
+  due_on: "2026-09-22",
 };
 
 function post(body: unknown) {
@@ -992,7 +1084,7 @@ export async function POST(request: NextRequest) {
       {
         ok: false,
         error:
-          "Invalid flow: need direction 'outgoing' or 'incoming', amount>0, distinct 3-letter currency and home_currency, invoiced_on as YYYY-MM-DD, days_until_due 0-365",
+          "Invalid flow: need direction 'outgoing' or 'incoming', amount>0, distinct 3-letter currency and home_currency, invoiced_on and due_on as real YYYY-MM-DD dates, and due_on within a year of invoiced_on",
       },
       { status: 400 },
     );
@@ -1102,7 +1194,8 @@ create table public.flows (
   currency text not null,
   home_currency text not null,
   invoiced_on date not null,
-  days_until_due int not null default 21 check (days_until_due between 0 and 365),
+  -- A date, not a countdown: a stored "days until due" goes stale.
+  due_on date not null check (due_on >= invoiced_on),
   created_at timestamptz default now()
 );
 
@@ -1437,10 +1530,17 @@ with:
     const inv   = current.amount;
     const from  = current.currency;
     const to    = current.home_currency;
-    const days  = current.days_until_due;
+    // Derived, not stored, so the window shrinks as the due date approaches.
+    const days  = daysUntilDue(current);
     const label = current.label;
     // Drift is measured from the issue date; the risk window looks forward to the due date.
     const since = daysSince(current.invoiced_on);
+```
+
+Add the helper to the imports at the top of `fxhedge/hooks/use-app-data.ts`:
+
+```ts
+import { daysUntilDue } from "@/lib/flows/flow";
 ```
 
 - [ ] **Step 4: Update the effect dependencies**
@@ -1454,7 +1554,7 @@ Replace line 179:
 with:
 
 ```ts
-  }, [ready, current.amount, current.currency, current.home_currency, current.days_until_due, current.invoiced_on, current.label]);
+  }, [ready, current.amount, current.currency, current.home_currency, current.due_on, current.invoiced_on, current.label]);
 ```
 
 - [ ] **Step 5: Update onboarding's import**
@@ -1469,7 +1569,7 @@ with:
 
 ```ts
 import { useFlows } from "@/hooks/use-flows";
-import { todayIsoDate } from "@/lib/flows/flow";
+import { todayIsoDate, addDaysIso } from "@/lib/flows/flow";
 ```
 
 - [ ] **Step 6: Seed the first flow through the store**
@@ -1513,7 +1613,7 @@ with:
         currency: supplierCurrency,
         home_currency: homeCurrency,
         invoiced_on: todayIsoDate(),
-        days_until_due: Math.round(days),
+        due_on: addDaysIso(todayIsoDate(), Math.round(days)),
       });
 ```
 
@@ -1553,7 +1653,7 @@ with:
 
 ```ts
 import { useFlows } from "@/hooks/use-flows";
-import { todayIsoDate, CURRENCIES } from "@/lib/flows/flow";
+import { todayIsoDate, addDaysIso, daysUntilDue, CURRENCIES } from "@/lib/flows/flow";
 import type { Flow, FlowDirection } from "@/types/flow";
 ```
 
@@ -1636,7 +1736,7 @@ with:
       currency: from,
       home_currency: to,
       invoiced_on: invoicedOn || todayIsoDate(),
-      days_until_due: days,
+      due_on: addDaysIso(todayIsoDate(), days),
     });
 
     // Only a payable can be analyzed on the dashboard. A receivable exists to
@@ -1772,7 +1872,7 @@ The list currently maps `recent`. Replace `recent` with `flows` throughout the "
                             ? `${inv.currency} in`
                             : `${inv.currency}→${inv.home_currency}`}
                         </span>
-                        <span className="tabular">{inv.days_until_due}d</span>
+                        <span className="tabular">{daysUntilDue(inv)}d left</span>
                         <span aria-hidden="true">·</span>
                         <span>{fmtWhen(inv.created_at)}</span>
                       </div>

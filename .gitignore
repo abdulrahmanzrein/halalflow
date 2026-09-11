@@ -14,3 +14,5 @@ halalflow-pitch*
 halalflow-deck/
 .playwright-mcp/
 .DS_Store
+
+.superpowers/
