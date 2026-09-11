@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   createLocalStore,
-  migrateLegacy,
+  readLegacyInvoices,
+  clearLegacyInvoices,
   readCurrentId,
   writeCurrentId,
   KEY_FLOWS,
@@ -83,21 +84,49 @@ describe("createLocalStore", () => {
     const store = createLocalStore(storage);
     expect(await store.list()).toHaveLength(1); // falls back to the sample
   });
+
+  it("drops malformed entries instead of crashing on them", async () => {
+    // A parseable array whose entries are junk is the path that actually
+    // throws — sorting calls created_at on every element.
+    storage.setItem(
+      KEY_FLOWS,
+      JSON.stringify([
+        null,
+        { id: "no-dates" },
+        {
+          id: "good",
+          direction: "outgoing",
+          label: "Real",
+          amount: 100,
+          currency: "EUR",
+          home_currency: "CAD",
+          invoiced_on: "2026-09-01",
+          due_on: "2026-09-22",
+          created_at: "2026-09-01T00:00:00.000Z",
+        },
+      ]),
+    );
+    const flows = await createLocalStore(storage).list();
+    expect(flows).toHaveLength(1);
+    expect(flows[0].id).toBe("good");
+  });
 });
 
-describe("migrateLegacy", () => {
+describe("legacy invoices", () => {
+  const oldInvoice = {
+    id: "old1",
+    amount: 9000,
+    from: "USD",
+    to: "CAD",
+    days: 30,
+    invoicedOn: "2026-08-01",
+    label: "Old invoice",
+    savedAt: "2026-08-01T00:00:00.000Z",
+  };
+
   it("converts old hedged: invoices into outgoing flows", () => {
     const storage = fakeStorage({
-      "hedged:current-invoice": JSON.stringify({
-        id: "old1",
-        amount: 9000,
-        from: "USD",
-        to: "CAD",
-        days: 30,
-        invoicedOn: "2026-08-01",
-        label: "Old invoice",
-        savedAt: "2026-08-01T00:00:00.000Z",
-      }),
+      "hedged:current-invoice": JSON.stringify(oldInvoice),
       "hedged:recent-invoices": JSON.stringify([
         {
           id: "old2",
@@ -112,7 +141,7 @@ describe("migrateLegacy", () => {
       ]),
     });
 
-    const flows = migrateLegacy(storage);
+    const flows = readLegacyInvoices(storage);
     expect(flows).toHaveLength(2);
     expect(flows.every((f) => f.direction === "outgoing")).toBe(true);
     expect(flows[0].currency).toBe("USD");
@@ -122,57 +151,53 @@ describe("migrateLegacy", () => {
     expect(flows[0].due_on).toBe("2026-08-31");
   });
 
+  it("anchors both dates on savedAt when the old record has no invoice date", () => {
+    const { invoicedOn: _omitted, ...noDate } = oldInvoice;
+    const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(noDate) });
+    const [flow] = readLegacyInvoices(storage);
+    // Anchoring one end on today would let invoiced_on drift past due_on,
+    // which parseFlowInput rejects as impossible.
+    expect(flow.invoiced_on).toBe("2026-07-02"); // savedAt - 30 days
+    expect(flow.due_on).toBe("2026-08-31");      // savedAt + 30 days
+  });
+
   it("de-duplicates an invoice present in both legacy keys", () => {
-    const inv = {
-      id: "dup",
-      amount: 1000,
-      from: "EUR",
-      to: "CAD",
-      days: 21,
-      invoicedOn: "2026-08-01",
-      label: "Dup",
-      savedAt: "2026-08-01T00:00:00.000Z",
-    };
     const storage = fakeStorage({
-      "hedged:current-invoice": JSON.stringify(inv),
-      "hedged:recent-invoices": JSON.stringify([inv]),
+      "hedged:current-invoice": JSON.stringify(oldInvoice),
+      "hedged:recent-invoices": JSON.stringify([oldInvoice]),
     });
-    expect(migrateLegacy(storage)).toHaveLength(1);
+    expect(readLegacyInvoices(storage)).toHaveLength(1);
   });
 
-  it("is idempotent — a second run finds nothing", () => {
-    const storage = fakeStorage({
-      "hedged:current-invoice": JSON.stringify({
-        id: "old1",
-        amount: 9000,
-        from: "USD",
-        to: "CAD",
-        days: 30,
-        invoicedOn: "2026-08-01",
-        label: "Old invoice",
-        savedAt: "2026-08-01T00:00:00.000Z",
-      }),
-    });
-    expect(migrateLegacy(storage)).toHaveLength(1);
-    expect(migrateLegacy(storage)).toHaveLength(0);
+  it("reads without destroying, and clears only when asked", () => {
+    const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(oldInvoice) });
+    expect(readLegacyInvoices(storage)).toHaveLength(1);
+    expect(readLegacyInvoices(storage)).toHaveLength(1); // reading is not destructive
+    clearLegacyInvoices(storage);
+    expect(readLegacyInvoices(storage)).toHaveLength(0);
   });
 
-  it("is used by the store so a returning user keeps their invoices", async () => {
-    const storage = fakeStorage({
-      "hedged:current-invoice": JSON.stringify({
-        id: "old1",
-        amount: 9000,
-        from: "USD",
-        to: "CAD",
-        days: 30,
-        invoicedOn: "2026-08-01",
-        label: "Old invoice",
-        savedAt: "2026-08-01T00:00:00.000Z",
-      }),
-    });
+  it("migrates through the store and actually persists the result", async () => {
+    const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(oldInvoice) });
     const flows = await createLocalStore(storage).list();
     expect(flows).toHaveLength(1);
     expect(flows[0].label).toBe("Old invoice");
+    // A second store over the same storage only sees the data if the
+    // migration wrote it — asserting the first return value would not.
+    expect(await createLocalStore(storage).list()).toHaveLength(1);
+    expect(storage.getItem("hedged:current-invoice")).toBeNull();
+  });
+
+  it("keeps the legacy data when the write fails, rather than losing it", async () => {
+    const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(oldInvoice) });
+    storage.setItem = () => {
+      throw new Error("quota exceeded");
+    };
+
+    const flows = await createLocalStore(storage).list();
+    expect(flows).toHaveLength(1); // still usable for this session
+    // The only copy survives, so the next load can retry the migration.
+    expect(storage.getItem("hedged:current-invoice")).not.toBeNull();
   });
 });
 
