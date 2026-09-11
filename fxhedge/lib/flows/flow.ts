@@ -20,7 +20,36 @@ export function isoDaysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function toPair(flow: Flow): string {
+export function addDaysIso(iso: string, n: number): string {
+  const t = Date.parse(`${iso}T00:00:00Z`);
+  if (Number.isNaN(t)) return iso;
+  return new Date(t + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * `Date.parse` alone is not a date validator: it silently rolls "2026-02-31"
+ * forward to March 3rd. Round-tripping the parsed value back to a string is
+ * what actually rejects impossible calendar dates.
+ */
+export function isValidIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const t = Date.parse(`${value}T00:00:00Z`);
+  if (Number.isNaN(t)) return false;
+  return new Date(t).toISOString().slice(0, 10) === value;
+}
+
+/** Days from `today` until the flow is due, floored at 0. */
+export function daysUntilDue(
+  flow: Pick<Flow, "due_on">,
+  today: string = todayIsoDate(),
+): number {
+  const due = Date.parse(`${flow.due_on}T00:00:00Z`);
+  const now = Date.parse(`${today}T00:00:00Z`);
+  if (Number.isNaN(due) || Number.isNaN(now)) return 0;
+  return Math.max(0, Math.round((due - now) / 86_400_000));
+}
+
+export function toPair(flow: Pick<Flow, "currency" | "home_currency">): string {
   return `${flow.currency}-${flow.home_currency}`;
 }
 
@@ -50,12 +79,16 @@ export function parseFlowInput(body: unknown): FlowInput | null {
   if (!/^[A-Z]{3}$/.test(currency) || !/^[A-Z]{3}$/.test(home)) return null;
   if (currency === home) return null;
 
-  const invoicedOn = typeof b.invoiced_on === "string" ? b.invoiced_on : "";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(invoicedOn)) return null;
-  if (Number.isNaN(Date.parse(`${invoicedOn}T00:00:00Z`))) return null;
+  if (!isValidIsoDate(b.invoiced_on)) return null;
+  if (!isValidIsoDate(b.due_on)) return null;
+  const invoicedOn = b.invoiced_on;
+  const dueOn = b.due_on;
 
-  const days = Number(b.days_until_due);
-  if (!Number.isFinite(days) || days < 0 || days > 365) return null;
+  // A due date before the invoice date is always a mistake, and a window
+  // beyond a year is outside what the historical engines model.
+  const span = daysUntilDue({ due_on: dueOn }, invoicedOn);
+  if (Date.parse(`${dueOn}T00:00:00Z`) < Date.parse(`${invoicedOn}T00:00:00Z`)) return null;
+  if (span > 365) return null;
 
   const rawLabel = typeof b.label === "string" ? b.label.trim() : "";
   const label = rawLabel
@@ -71,7 +104,7 @@ export function parseFlowInput(body: unknown): FlowInput | null {
     currency,
     home_currency: home,
     invoiced_on: invoicedOn,
-    days_until_due: Math.round(days),
+    due_on: dueOn,
   };
 }
 
@@ -87,7 +120,11 @@ export function pickCurrentFlow(flows: Flow[], selectedId: string | null): Flow 
     const found = outgoing.find((f) => f.id === selectedId);
     if (found) return found;
   }
-  return [...outgoing].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  // Plain comparison, not `localeCompare`: these are fixed-width machine
+  // timestamps, so collation rules buy nothing and only add failure modes.
+  return [...outgoing].sort((a, b) =>
+    a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
+  )[0];
 }
 
 /** The built-in demo payable, used before a user has saved anything. */
@@ -99,8 +136,11 @@ export function sampleFlow(): Flow {
     amount: MOCK_PROFILE.invoice_amount,
     currency: MOCK_PROFILE.supplier_currency,
     home_currency: MOCK_PROFILE.home_currency,
+    // Issued 21 days ago (the drift baseline) and due 21 days from today
+    // (the forward exposure window) — the two are independent now that the
+    // due date is stored rather than counted down from a stale number.
     invoiced_on: isoDaysAgo(MOCK_PROFILE.days_until_due),
-    days_until_due: MOCK_PROFILE.days_until_due,
+    due_on: addDaysIso(todayIsoDate(), MOCK_PROFILE.days_until_due),
     created_at: new Date().toISOString(),
   };
 }

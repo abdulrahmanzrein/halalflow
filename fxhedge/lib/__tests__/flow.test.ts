@@ -4,6 +4,9 @@ import {
   pickCurrentFlow,
   toPair,
   flowToCurrencyFlow,
+  daysUntilDue,
+  addDaysIso,
+  isValidIsoDate,
 } from "../flows/flow";
 import type { Flow } from "@/types/flow";
 
@@ -16,7 +19,7 @@ function flow(over: Partial<Flow> = {}): Flow {
     currency: "EUR",
     home_currency: "CAD",
     invoiced_on: "2026-09-01",
-    days_until_due: 21,
+    due_on: "2026-09-22",
     created_at: "2026-09-01T00:00:00.000Z",
     ...over,
   };
@@ -29,7 +32,7 @@ const valid = {
   currency: "eur",
   home_currency: "cad",
   invoiced_on: "2026-09-01",
-  days_until_due: 21,
+  due_on: "2026-09-22",
 };
 
 describe("parseFlowInput", () => {
@@ -66,9 +69,23 @@ describe("parseFlowInput", () => {
     expect(parseFlowInput({ ...valid, invoiced_on: "01-09-2026" })).toBeNull();
   });
 
-  it("rejects an out-of-range due window", () => {
-    expect(parseFlowInput({ ...valid, days_until_due: 400 })).toBeNull();
-    expect(parseFlowInput({ ...valid, days_until_due: -1 })).toBeNull();
+  it("rejects impossible calendar dates that Date.parse silently rolls over", () => {
+    // Date.parse("2026-02-31T00:00:00Z") happily yields March 3rd.
+    expect(parseFlowInput({ ...valid, invoiced_on: "2026-02-31" })).toBeNull();
+    expect(parseFlowInput({ ...valid, due_on: "2026-04-31" })).toBeNull();
+    expect(parseFlowInput({ ...valid, due_on: "2026-13-01" })).toBeNull();
+  });
+
+  it("rejects a due date before the invoice date", () => {
+    expect(parseFlowInput({ ...valid, due_on: "2026-08-31" })).toBeNull();
+  });
+
+  it("rejects a window longer than a year", () => {
+    expect(parseFlowInput({ ...valid, due_on: "2027-10-01" })).toBeNull();
+  });
+
+  it("accepts a same-day due date", () => {
+    expect(parseFlowInput({ ...valid, due_on: "2026-09-01" })).not.toBeNull();
   });
 
   it("rejects non-objects", () => {
@@ -98,6 +115,35 @@ describe("pickCurrentFlow", () => {
     const out = flow({ id: "out" });
     const inc = flow({ id: "inc", direction: "incoming" });
     expect(pickCurrentFlow([out, inc], "inc")!.id).toBe("out");
+  });
+});
+
+describe("daysUntilDue", () => {
+  it("counts forward from the given day", () => {
+    expect(daysUntilDue(flow(), "2026-09-01")).toBe(21);
+    expect(daysUntilDue(flow(), "2026-09-15")).toBe(7);
+  });
+
+  it("floors at zero once the due date has passed", () => {
+    expect(daysUntilDue(flow(), "2026-10-01")).toBe(0);
+  });
+
+  it("does not go stale — the same flow shrinks as today advances", () => {
+    const f = flow();
+    expect(daysUntilDue(f, "2026-09-10")).toBeGreaterThan(daysUntilDue(f, "2026-09-20"));
+  });
+});
+
+describe("addDaysIso / isValidIsoDate", () => {
+  it("adds days across a month boundary", () => {
+    expect(addDaysIso("2026-09-25", 10)).toBe("2026-10-05");
+  });
+
+  it("rejects impossible dates and accepts real ones", () => {
+    expect(isValidIsoDate("2026-02-31")).toBe(false);
+    expect(isValidIsoDate("2026-02-28")).toBe(true);
+    expect(isValidIsoDate("nope")).toBe(false);
+    expect(isValidIsoDate(20260228)).toBe(false);
   });
 });
 

@@ -13,9 +13,14 @@ export interface Flow {
   currency: string;
   /** The business's own currency, e.g. "CAD". */
   home_currency: string;
-  /** ISO date, "2026-09-11". */
+  /** ISO date the invoice was issued, "2026-09-11". */
   invoiced_on: string;
-  days_until_due: number;
+  /**
+   * ISO date the money is due to move. Stored as a date, not a countdown:
+   * a stored "days until due" silently goes stale as time passes.
+   * Use `daysUntilDue(flow)` for the remaining window.
+   */
+  due_on: string;
   /** ISO timestamp. */
   created_at: string;
 }
