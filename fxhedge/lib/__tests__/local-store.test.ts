@@ -152,7 +152,8 @@ describe("legacy invoices", () => {
   });
 
   it("anchors both dates on savedAt when the old record has no invoice date", () => {
-    const { invoicedOn: _omitted, ...noDate } = oldInvoice;
+    // JSON.stringify drops undefined keys, so this is a record without the field.
+    const noDate = { ...oldInvoice, invoicedOn: undefined };
     const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(noDate) });
     const [flow] = readLegacyInvoices(storage);
     // Anchoring one end on today would let invoiced_on drift past due_on,
@@ -182,9 +183,10 @@ describe("legacy invoices", () => {
     const flows = await createLocalStore(storage).list();
     expect(flows).toHaveLength(1);
     expect(flows[0].label).toBe("Old invoice");
-    // A second store over the same storage only sees the data if the
-    // migration wrote it — asserting the first return value would not.
-    expect(await createLocalStore(storage).list()).toHaveLength(1);
+    // Assert identity, not count: sampleFlow() is also one element, so a
+    // write that silently persisted nothing would pass a length check.
+    const again = await createLocalStore(storage).list();
+    expect(again[0].label).toBe("Old invoice");
     expect(storage.getItem("hedged:current-invoice")).toBeNull();
   });
 
@@ -195,8 +197,18 @@ describe("legacy invoices", () => {
     };
 
     const flows = await createLocalStore(storage).list();
-    expect(flows).toHaveLength(1); // still usable for this session
+    expect(flows[0].label).toBe("Old invoice"); // still usable for this session
     // The only copy survives, so the next load can retry the migration.
+    expect(storage.getItem("hedged:current-invoice")).not.toBeNull();
+  });
+
+  it("does not clear the legacy keys when a converted record is unusable", async () => {
+    // A legacy amount stored as a formatted string becomes NaN, which
+    // JSON round-trips to null and fails isUsableFlow on the next read.
+    const storage = fakeStorage({
+      "hedged:current-invoice": JSON.stringify({ ...oldInvoice, amount: "9,000" }),
+    });
+    await createLocalStore(storage).list();
     expect(storage.getItem("hedged:current-invoice")).not.toBeNull();
   });
 });

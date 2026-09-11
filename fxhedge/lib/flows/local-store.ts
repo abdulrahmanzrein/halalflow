@@ -57,7 +57,8 @@ function isUsableFlow(value: unknown): value is Flow {
   return (
     typeof f.id === "string" &&
     (f.direction === "outgoing" || f.direction === "incoming") &&
-    typeof f.amount === "number" &&
+    typeof f.label === "string" &&
+    Number.isFinite(f.amount) &&
     typeof f.currency === "string" &&
     typeof f.home_currency === "string" &&
     isValidIsoDate(f.invoiced_on) &&
@@ -122,10 +123,14 @@ export function readLegacyInvoices(storage: Storage): Flow[] {
       for (const inv of list) {
         if (!inv?.id || seen.has(inv.id)) continue;
         seen.add(inv.id);
-        out.push(legacyToFlow(inv));
+        try {
+          out.push(legacyToFlow(inv));
+        } catch {
+          // One ragged record must not cost the user the rest of the key.
+        }
       }
     } catch {
-      // Corrupt legacy data — drop it rather than block the migration.
+      // Unreadable or unparseable key — skip it and try the other one.
     }
   }
 
@@ -168,7 +173,10 @@ export function createLocalStore(storage: Storage): FlowStore {
     const { ok, flows } = readParsed(storage);
     if (ok) return flows;
 
-    const migrated = readLegacyInvoices(storage);
+    // Filter before trusting: a converted record that cannot survive a round
+    // trip (a "9,000" amount becomes NaN, then null) would be silently
+    // dropped on the next read — after the legacy keys were already cleared.
+    const migrated = readLegacyInvoices(storage).filter(isUsableFlow);
     const seeded = migrated.length > 0 ? migrated : [sampleFlow()];
     // Drop the old keys only once the converted list is actually saved:
     // a failed write here would otherwise erase the user's only copy.
