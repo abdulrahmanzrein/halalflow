@@ -469,7 +469,7 @@ git commit -m "feat(flows): add the Flow contract and its pure helpers"
 - Test: `fxhedge/lib/__tests__/local-store.test.ts`
 
 **Interfaces:**
-- Consumes: `Flow`, `FlowInput` from `@/types/flow`; `sampleFlow`, `isoDaysAgo` from `@/lib/flows/flow`.
+- Consumes: `Flow`, `FlowInput` from `@/types/flow`; `sampleFlow`, `addDaysIso`, `isValidIsoDate` from `@/lib/flows/flow`.
 - Produces: `FlowStore` interface (`list(): Promise<Flow[]>`, `create(input: FlowInput): Promise<Flow>`, `remove(id: string): Promise<void>`); `createLocalStore(storage: Storage): FlowStore`; `readLegacyInvoices(storage: Storage): Flow[]` (non-destructive); `clearLegacyInvoices(storage: Storage): void`; `readCurrentId(storage: Storage): string | null`; `writeCurrentId(storage: Storage, id: string): void`; constants `KEY_FLOWS`, `KEY_CURRENT`.
 
 **Why the migration is split into read and clear:** deleting the legacy keys inside the same call that returns the data means a failed write destroys the user's only copy. The store clears the old keys only after the new list is confirmed persisted.
@@ -651,7 +651,8 @@ describe("legacy invoices", () => {
   });
 
   it("anchors both dates on savedAt when the old record has no invoice date", () => {
-    const { invoicedOn: _omitted, ...noDate } = oldInvoice;
+    // JSON.stringify drops undefined keys, so this is a record without the field.
+    const noDate = { ...oldInvoice, invoicedOn: undefined };
     const storage = fakeStorage({ "hedged:current-invoice": JSON.stringify(noDate) });
     const [flow] = readLegacyInvoices(storage);
     // Anchoring one end on today would let invoiced_on drift past due_on,
@@ -681,9 +682,10 @@ describe("legacy invoices", () => {
     const flows = await createLocalStore(storage).list();
     expect(flows).toHaveLength(1);
     expect(flows[0].label).toBe("Old invoice");
-    // A second store over the same storage only sees the data if the
-    // migration wrote it — asserting the first return value would not.
-    expect(await createLocalStore(storage).list()).toHaveLength(1);
+    // Assert identity, not count: sampleFlow() is also one element, so a
+    // write that silently persisted nothing would pass a length check.
+    const again = await createLocalStore(storage).list();
+    expect(again[0].label).toBe("Old invoice");
     expect(storage.getItem("hedged:current-invoice")).toBeNull();
   });
 
@@ -694,8 +696,18 @@ describe("legacy invoices", () => {
     };
 
     const flows = await createLocalStore(storage).list();
-    expect(flows).toHaveLength(1); // still usable for this session
+    expect(flows[0].label).toBe("Old invoice"); // still usable for this session
     // The only copy survives, so the next load can retry the migration.
+    expect(storage.getItem("hedged:current-invoice")).not.toBeNull();
+  });
+
+  it("does not clear the legacy keys when a converted record is unusable", async () => {
+    // A legacy amount stored as a formatted string becomes NaN, which
+    // JSON round-trips to null and fails isUsableFlow on the next read.
+    const storage = fakeStorage({
+      "hedged:current-invoice": JSON.stringify({ ...oldInvoice, amount: "9,000" }),
+    });
+    await createLocalStore(storage).list();
     expect(storage.getItem("hedged:current-invoice")).not.toBeNull();
   });
 });
@@ -779,7 +791,8 @@ function isUsableFlow(value: unknown): value is Flow {
   return (
     typeof f.id === "string" &&
     (f.direction === "outgoing" || f.direction === "incoming") &&
-    typeof f.amount === "number" &&
+    typeof f.label === "string" &&
+    Number.isFinite(f.amount) &&
     typeof f.currency === "string" &&
     typeof f.home_currency === "string" &&
     isValidIsoDate(f.invoiced_on) &&
@@ -844,10 +857,14 @@ export function readLegacyInvoices(storage: Storage): Flow[] {
       for (const inv of list) {
         if (!inv?.id || seen.has(inv.id)) continue;
         seen.add(inv.id);
-        out.push(legacyToFlow(inv));
+        try {
+          out.push(legacyToFlow(inv));
+        } catch {
+          // One ragged record must not cost the user the rest of the key.
+        }
       }
     } catch {
-      // Corrupt legacy data — drop it rather than block the migration.
+      // Unreadable or unparseable key — skip it and try the other one.
     }
   }
 
@@ -890,7 +907,10 @@ export function createLocalStore(storage: Storage): FlowStore {
     const { ok, flows } = readParsed(storage);
     if (ok) return flows;
 
-    const migrated = readLegacyInvoices(storage);
+    // Filter before trusting: a converted record that cannot survive a round
+    // trip (a "9,000" amount becomes NaN, then null) would be silently
+    // dropped on the next read — after the legacy keys were already cleared.
+    const migrated = readLegacyInvoices(storage).filter(isUsableFlow);
     const seeded = migrated.length > 0 ? migrated : [sampleFlow()];
     // Drop the old keys only once the converted list is actually saved:
     // a failed write here would otherwise erase the user's only copy.
