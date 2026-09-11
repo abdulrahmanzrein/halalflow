@@ -36,7 +36,7 @@ hedge detector real data, and removes the duplicated component — in one change
 Deferred to specs 2 and 3, and explicitly out of scope here:
 
 - Guest demo mode: middleware changes, demo banner, guest→account migration on signup
-- `/privacy` and `/terms` pages, `.env.example`
+- `.env.example`
 - Chat widget's `MOCK_PROFILE` context
 - Dashboard's inline cost math vs. the tested `buildCostBreakdown`
 

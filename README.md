@@ -14,7 +14,7 @@ HalalFlow helps import businesses see the true cost and risk of foreign-currency
 - **Provider comparison** showing amount received, transfer fee, and hidden markup.
 - **Risk and breakeven engines** to estimate downside from historical windows.
 - **Natural hedge detection** to net matching incoming/outgoing currency flows.
-- **Sharia options + assistant** for educational guidance with clear disclaimers.
+- **Assistant** for educational Islamic-finance guidance with clear disclaimers.
 - **Business zakat calculator** for foreign holdings and receivables.
 
 ## Tech Stack

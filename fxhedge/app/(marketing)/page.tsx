@@ -16,8 +16,8 @@ const features = [
     desc:  "Wise, Instarem, Deutsche Bank and Western Union ranked by what your supplier actually receives, not the headline rate. One view, real numbers.",
   },
   {
-    title: "Islamic finance options",
-    desc:  "Explore murabaha, wa'd and natural hedges alongside conventional solutions, grounded in cited scholarly sources so you can make an informed choice.",
+    title: "Ask before you hedge",
+    desc:  "HalalFlow Assistant explains murabaha, wa'd, and natural hedges with cited sources — educational guidance, not a fatwa.",
   },
 ];
 
@@ -498,10 +498,6 @@ export default function LandingPage() {
           <p className="text-center text-[11.5px] text-[var(--color-muted-fg)] max-w-[44ch]">
             HalalFlow never moves money and never predicts exchange rates. General education only, not financial advice.
           </p>
-          <nav aria-label="Legal" className="flex items-center gap-4 text-[11.5px] text-[var(--color-muted-fg)]">
-            <Link href="/privacy" className="hover:text-[var(--color-fg)] transition-colors">Privacy policy</Link>
-            <Link href="/terms" className="hover:text-[var(--color-fg)] transition-colors">Terms of use</Link>
-          </nav>
         </div>
       </footer>
     </div>

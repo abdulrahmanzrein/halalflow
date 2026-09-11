@@ -5,7 +5,6 @@ const PROTECTED_PREFIXES = [
   "/dashboard",
   "/transfer",
   "/risk",
-  "/sharia",
   "/zakat",
 ];
 

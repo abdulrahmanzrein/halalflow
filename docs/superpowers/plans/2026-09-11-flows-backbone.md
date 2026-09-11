@@ -1630,7 +1630,7 @@ git commit -m "feat(flows): add the API store and the useFlows hook"
 
 **Interfaces:**
 - Consumes: `useFlows` from `@/hooks/use-flows`; `todayIsoDate` from `@/lib/flows/flow`.
-- Produces: no new exports. `AppData`'s shape is unchanged, so `risk`, `zakat`, `sharia`, `ask`, `dashboard` and `breakeven` keep working untouched.
+- Produces: no new exports. `AppData`'s shape is unchanged, so `risk`, `zakat`, `ask`, `dashboard` and `breakeven` keep working untouched.
 
 - [ ] **Step 1: Swap the hook in `use-app-data.ts`**
 
@@ -2234,7 +2234,7 @@ Expected: all tests PASS, no type errors, build succeeds, lint clean.
 
 - [ ] **Step 3: Walk the whole app signed in**
 
-Run `npm run dev` and visit `/dashboard`, `/transfer`, `/risk`, `/breakeven`, `/sharia`, `/zakat`, `/ask`.
+Run `npm run dev` and visit `/dashboard`, `/transfer`, `/risk`, `/breakeven`, `/zakat`, `/ask`.
 Expected: every page renders with your own flow's numbers, no console errors, and no request to `/api/scenarios` or `/api/natural-hedge` in the network tab.
 
 - [ ] **Step 4: Confirm persistence across devices**
