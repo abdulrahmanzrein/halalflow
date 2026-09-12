@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useInvoice, todayIsoDate } from "@/hooks/use-invoice";
+import { useFlows } from "@/hooks/use-flows";
+import { todayIsoDate, addDaysIso } from "@/lib/flows/flow";
 
 const CURRENCIES = ["USD", "CAD", "EUR", "GBP", "AUD", "SGD", "AED", "SAR"];
 const BUSINESS_TYPES = [
@@ -16,7 +17,7 @@ const BUSINESS_TYPES = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { setCurrent } = useInvoice();
+  const { addFlow } = useFlows();
 
   const [businessName, setBusinessName] = useState("");
   const [businessType, setBusinessType] = useState("");
@@ -59,16 +60,15 @@ export default function OnboardingPage() {
         throw new Error(body?.error ?? "Could not save your profile.");
       }
 
-      // Seed the working invoice so the dashboard reflects these answers at once.
-      setCurrent({
-        id: "onboarding",
-        amount,
-        from: supplierCurrency,
-        to: homeCurrency,
-        days: Math.round(days),
-        invoicedOn: todayIsoDate(),
+      // Seed the working flow so the dashboard reflects these answers at once.
+      await addFlow({
+        direction: "outgoing",
         label: businessName.trim() ? `${businessName.trim()} invoice` : "First invoice",
-        savedAt: new Date().toISOString(),
+        amount,
+        currency: supplierCurrency,
+        home_currency: homeCurrency,
+        invoiced_on: todayIsoDate(),
+        due_on: addDaysIso(todayIsoDate(), Math.round(days)),
       });
 
       router.push("/dashboard");

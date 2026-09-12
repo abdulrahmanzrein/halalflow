@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { MOCK_PROFILE, SAMPLE } from "@/lib/fixtures";
-import { useInvoice } from "./use-invoice";
+import { useFlows } from "./use-flows";
+import { daysUntilDue } from "@/lib/flows/flow";
 import type { FXRate, ProviderQuote, RiskResult } from "@/types";
 
 export interface AppData {
@@ -87,7 +88,7 @@ function shortDay(iso: string) {
 }
 
 export function useAppData(): AppData {
-  const { current, ready } = useInvoice();
+  const { current, ready } = useFlows();
 
   const [data, setData] = useState<AppData>(() => ({
     ...buildFallback({
@@ -106,12 +107,13 @@ export function useAppData(): AppData {
     if (!ready) return;
 
     const inv   = current.amount;
-    const from  = current.from;
-    const to    = current.to;
-    const days  = current.days;
+    const from  = current.currency;
+    const to    = current.home_currency;
+    // Derived, not stored, so the window shrinks as the due date approaches.
+    const days  = daysUntilDue(current);
     const label = current.label;
     // Drift is measured from the issue date; the risk window looks forward to the due date.
-    const since = daysSince(current.invoicedOn);
+    const since = daysSince(current.invoiced_on);
 
     setData((prev) => ({ ...prev, loading: true, error: false }));
 
@@ -176,7 +178,7 @@ export function useAppData(): AppData {
     }
 
     load();
-  }, [ready, current.amount, current.from, current.to, current.days, current.invoicedOn, current.label]);
+  }, [ready, current.amount, current.currency, current.home_currency, current.due_on, current.invoiced_on, current.label]);
 
   return data;
 }
