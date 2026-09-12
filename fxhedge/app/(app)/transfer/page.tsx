@@ -1,12 +1,13 @@
 "use client";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useInvoice, todayIsoDate, type Invoice } from "@/hooks/use-invoice";
+import Link from "next/link";
+import { useFlows } from "@/hooks/use-flows";
+import { todayIsoDate, addDaysIso, daysUntilDue, CURRENCIES } from "@/lib/flows/flow";
+import type { Flow, FlowDirection } from "@/types/flow";
 import { currencySymbol } from "@/lib/fixtures";
 import { usePageFade } from "@/components/page-fade";
 import { ArrowRight, Clock, Trash2, FileText, Upload, Sparkles } from "lucide-react";
-
-const CURRENCIES = ["EUR", "USD", "GBP", "CAD", "AUD", "SGD"];
 
 declare global { interface Window { pdfjsLib: any } }
 const PDFJS_CDN     = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
@@ -60,22 +61,21 @@ function fmtWhen(iso: string) {
   return d.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
 }
 
-function newId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `inv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 export default function TransferPage() {
   const router = useRouter();
-  const { recent, setCurrent, removeRecent, ready } = useInvoice();
+  const { flows, addFlow, selectFlow, removeFlow, ready } = useFlows();
   const { fade } = usePageFade();
 
+  const [direction, setDirection] = useState<FlowDirection>("outgoing");
   const [from,   setFrom]   = useState("EUR");
   const [to,     setTo]     = useState("CAD");
   const [amount, setAmount] = useState(12000);
   const [days,   setDays]   = useState(21);
   const [label,  setLabel]  = useState("");
   const [invoicedOn, setInvoicedOn] = useState(todayIsoDate);
+  const [saved, setSaved] = useState<Flow | null>(null);
+
+  const incoming = direction === "incoming";
 
   // PDF drop / extract
   const [dragActive, setDragActive] = useState(false);
@@ -110,7 +110,7 @@ export default function TransferPage() {
       const parsed = parseInvoice(text);
       const found: string[] = [];
       if (parsed.amount)   { setAmount(parsed.amount);         found.push("amount"); }
-      if (parsed.currency && CURRENCIES.includes(parsed.currency)) {
+      if (parsed.currency && (CURRENCIES as readonly string[]).includes(parsed.currency)) {
         setFrom(parsed.currency);                              found.push("currency");
       }
       if (parsed.label)    { setLabel(parsed.label.slice(0, 60)); found.push("label"); }
@@ -135,22 +135,33 @@ export default function TransferPage() {
   function onDragOver(e: React.DragEvent) { e.preventDefault(); setDragActive(true); }
   function onDragLeave(e: React.DragEvent) { e.preventDefault(); setDragActive(false); }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (from === to || amount <= 0) return;
-    const inv: Invoice = {
-      id:     newId(),
-      amount, from, to, days,
-      invoicedOn: invoicedOn || todayIsoDate(),
-      label:  label.trim() || `${from}→${to} invoice`,
-      savedAt: new Date().toISOString(),
-    };
-    setCurrent(inv);
-    router.push("/dashboard");
+
+    const created = await addFlow({
+      direction,
+      label: label.trim() || (incoming ? `${from} receivable` : `${from}→${to} invoice`),
+      amount,
+      currency: from,
+      home_currency: to,
+      invoiced_on: invoicedOn || todayIsoDate(),
+      due_on: addDaysIso(todayIsoDate(), days),
+    });
+
+    // Only a payable can be analyzed on the dashboard. A receivable exists to
+    // offset one, so we stay here and point at the page where that shows up.
+    if (created.direction === "outgoing") {
+      router.push("/dashboard");
+      return;
+    }
+    setSaved(created);
+    setLabel("");
   }
 
-  function pickRecent(inv: Invoice) {
-    setCurrent(inv);
+  function pickRecent(flow: Flow) {
+    if (flow.direction !== "outgoing") return;
+    selectFlow(flow.id);
     router.push("/dashboard");
   }
 
@@ -180,6 +191,38 @@ export default function TransferPage() {
           className="lg:col-span-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 flex flex-col gap-4 min-h-0 overflow-y-auto"
           style={fade(1)}
         >
+          {/* Direction — the one control that makes natural hedging possible */}
+          <div>
+            <span className="block text-xs font-medium text-[var(--color-muted-fg)] mb-1.5">
+              What kind of payment is this?
+            </span>
+            <div role="radiogroup" aria-label="Flow direction" className="grid grid-cols-2 gap-2">
+              {([
+                { value: "outgoing", title: "Money going out", hint: "A supplier invoice you owe" },
+                { value: "incoming", title: "Money coming in", hint: "A customer payment you expect" },
+              ] as const).map((opt) => {
+                const active = direction === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => { setDirection(opt.value); setSaved(null); }}
+                    className="rounded-xl border px-3 py-2.5 text-left transition-colors"
+                    style={{
+                      borderColor: active ? "var(--color-primary)" : "var(--color-border)",
+                      background: active ? "rgba(34,197,94,0.06)" : "transparent",
+                    }}
+                  >
+                    <span className="block text-sm font-semibold text-[var(--color-fg)]">{opt.title}</span>
+                    <span className="block text-[11px] text-[var(--color-muted-fg)]">{opt.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* PDF drop zone */}
           <div
             onDrop={onDrop}
@@ -281,7 +324,10 @@ export default function TransferPage() {
             </Field>
           </div>
 
-          <Field label={`Invoice amount (${currencySymbol(from)}${from})`} htmlFor="inv-amt">
+          <Field
+            label={`${incoming ? "Amount expected" : "Invoice amount"} (${currencySymbol(from)}${from})`}
+            htmlFor="inv-amt"
+          >
             <input
               id="inv-amt"
               type="number"
@@ -305,7 +351,7 @@ export default function TransferPage() {
                 className={inputCls + " tabular"}
               />
             </Field>
-            <Field label="Days until due" htmlFor="inv-days">
+            <Field label={incoming ? "Days until paid" : "Days until due"} htmlFor="inv-days">
               <input
                 id="inv-days"
                 type="number"
@@ -320,8 +366,9 @@ export default function TransferPage() {
           </div>
 
           <p className="-mt-1 text-[11px] leading-relaxed text-[var(--color-muted-fg)]">
-            The invoice date sets what the rate is compared against. Days until due sets how long
-            you are still exposed.
+            {incoming
+              ? "The invoice date sets what the rate is compared against. Days until paid sets when this money lands, which is what lets it offset a payment in the same currency."
+              : "The invoice date sets what the rate is compared against. Days until due sets how long you are still exposed."}
           </p>
 
           <Field label="Label (optional)" htmlFor="inv-label">
@@ -345,8 +392,18 @@ export default function TransferPage() {
             className="mt-1 flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold text-white transition-[opacity,scale] duration-150 active:scale-[0.96] hover:opacity-90 disabled:opacity-40 disabled:active:scale-100"
             style={{ background: "var(--color-primary)" }}
           >
-            Analyze on dashboard <ArrowRight size={16} />
+            {incoming ? "Save this receivable" : "Analyze on dashboard"} <ArrowRight size={16} />
           </button>
+
+          {saved && (
+            <p className="text-xs text-[var(--color-muted-fg)]">
+              Saved {currencySymbol(saved.currency)}{saved.amount.toLocaleString()} {saved.currency} coming in.{" "}
+              <Link href="/breakeven" className="underline hover:text-[var(--color-fg)]">
+                See whether it offsets a payment
+              </Link>
+              .
+            </p>
+          )}
         </form>
 
         {/* Recent invoices */}
@@ -358,11 +415,11 @@ export default function TransferPage() {
             <div className="flex items-center gap-2">
               <Clock size={14} style={{ color: "var(--color-muted-fg)" }} />
               <span className="text-xs font-medium uppercase tracking-wider text-[var(--color-muted-fg)]">
-                Recent invoices
+                Your flows
               </span>
             </div>
-            {ready && recent.length > 0 && (
-              <span className="text-xs text-[var(--color-muted-fg)] tabular">{recent.length} saved</span>
+            {ready && flows.length > 0 && (
+              <span className="text-xs text-[var(--color-muted-fg)] tabular">{flows.length} saved</span>
             )}
           </div>
 
@@ -372,29 +429,27 @@ export default function TransferPage() {
                 <li key={i} className="animate-pulse h-16 rounded-xl bg-[var(--color-muted)]" />
               ))}
             </ul>
-          ) : recent.length === 0 ? (
+          ) : flows.length === 0 ? (
             <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center">
-              <p className="text-sm text-[var(--color-muted-fg)]">No recent invoices yet.</p>
-              <p className="text-xs text-[var(--color-muted-fg)] mt-1">
-                Analyze one on the left and it&apos;ll appear here.
-              </p>
+              <p className="text-sm text-[var(--color-muted-fg)]">No flows yet. Add a supplier invoice or a customer payment above.</p>
             </div>
           ) : (
             <ul className="flex-1 min-h-0 overflow-y-auto -mr-2 pr-2 space-y-1.5">
-              {recent.map((inv) => (
+              {flows.map((inv) => (
                 <li key={inv.id}>
                   <div className="group flex items-stretch rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors">
                     <button
                       type="button"
                       onClick={() => pickRecent(inv)}
-                      className="flex-1 min-w-0 text-left px-3 py-2.5 rounded-l-lg active:scale-[0.99] transition-transform duration-150"
+                      disabled={inv.direction === "incoming"}
+                      className="flex-1 min-w-0 text-left px-3 py-2.5 rounded-l-lg active:scale-[0.99] transition-transform duration-150 disabled:cursor-default disabled:active:scale-100"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-medium text-[var(--color-fg)] truncate">
                           {inv.label}
                         </span>
                         <span className="font-money tabular text-sm text-[var(--color-fg)] shrink-0">
-                          {currencySymbol(inv.from)}{inv.amount.toLocaleString()}
+                          {currencySymbol(inv.currency)}{inv.amount.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5 text-[11px] text-[var(--color-muted-fg)]">
@@ -402,16 +457,18 @@ export default function TransferPage() {
                           className="tabular rounded px-1 py-px font-semibold"
                           style={{ background: "var(--color-muted)" }}
                         >
-                          {inv.from}→{inv.to}
+                          {inv.direction === "incoming"
+                            ? `${inv.currency} in`
+                            : `${inv.currency}→${inv.home_currency}`}
                         </span>
-                        <span className="tabular">{inv.days}d due</span>
+                        <span className="tabular">{daysUntilDue(inv)}d left</span>
                         <span aria-hidden="true">·</span>
-                        <span>{fmtWhen(inv.savedAt)}</span>
+                        <span>{fmtWhen(inv.created_at)}</span>
                       </div>
                     </button>
                     <button
                       type="button"
-                      onClick={() => removeRecent(inv.id)}
+                      onClick={() => removeFlow(inv.id)}
                       className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity w-9 flex items-center justify-center border-l border-[var(--color-border)] hover:bg-[var(--color-muted)] rounded-r-lg"
                       aria-label={`Remove ${inv.label}`}
                     >
