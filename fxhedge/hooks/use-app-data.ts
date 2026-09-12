@@ -36,6 +36,8 @@ export interface AppData {
   // Risk
   driftTodayPct: number;
   worst5pctMove: number;
+  /** Worst absolute move seen in comparable historical windows. */
+  worstOnRecord: number;
   histWindows: number;
   marginAtRiskMinus5pct: number;
   decision: "pay_now" | "wait" | "marginal";
@@ -74,6 +76,7 @@ function buildFallback(inv: {
     savingVsWorst: SAMPLE.savingVsWorst,
     driftTodayPct: SAMPLE.driftTodayPct,
     worst5pctMove: SAMPLE.worst5pctMove,
+    worstOnRecord: SAMPLE.worstOnRecord,
     histWindows:   SAMPLE.histWindows,
     marginAtRiskMinus5pct: SAMPLE.marginAtRiskMinus5pct,
     decision: SAMPLE.decision,
@@ -183,6 +186,7 @@ export function useAppData(): AppData {
           savingVsWorst: cost.saving_vs_worst,
           driftTodayPct: risk.drift_today_pct,
           worst5pctMove: risk.worst_5pct_move,
+          worstOnRecord: risk.worst_on_record,
           histWindows:   risk.hist_windows,
           marginAtRiskMinus5pct: cost.margin_at_risk_minus5pct,
           decision:       risk.decision,

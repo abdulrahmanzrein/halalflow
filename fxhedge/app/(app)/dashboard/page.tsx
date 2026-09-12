@@ -12,6 +12,7 @@ import {
   PER_HOP_USD,
   BENEFICIARY_USD,
 } from "@/lib/correspondent-fees";
+import { computeBreakEven } from "@/lib/breakeven";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, ReferenceLine,
@@ -182,6 +183,34 @@ export default function DashboardPage() {
   const chartData = d.rateHistory.length ? d.rateHistory : [{ day: "…", rate: d.ecbRateToday }];
   const money = (n: number) => `${sym}${Math.round(n).toLocaleString()}`;
 
+  const cushion = computeBreakEven({
+    invoiceAmount: d.invoiceAmount,
+    revenue: d.revenue,
+    todayRate: d.ecbRateToday,
+    worst5pctMove: d.worst5pctMove,
+    worstOnRecord: d.worstOnRecord,
+  });
+  const cushionTone =
+    cushion.verdict === "comfortable"
+      ? "var(--color-primary)"
+      : cushion.verdict === "watch"
+        ? "var(--color-warning)"
+        : "var(--color-negative)";
+  const cushionBg =
+    cushion.verdict === "comfortable"
+      ? "rgba(61,214,140,.12)"
+      : cushion.verdict === "watch"
+        ? "rgba(245,158,11,.12)"
+        : "rgba(239,68,68,.12)";
+  const cushionBlurb =
+    cushion.cushion_pct <= 0
+      ? "At today's rate this deal already loses money. There is no room left."
+      : cushion.verdict === "comfortable"
+        ? `Your rate can move ${cushion.cushion_pct.toFixed(1)}% against you before you lose money.`
+        : cushion.verdict === "watch"
+          ? `Your cushion is ${cushion.cushion_pct.toFixed(1)}%. A bad week historically eats most of it.`
+          : `Only ${cushion.cushion_pct.toFixed(1)}% cushion remains. You are inside the danger zone.`;
+
   // Cost breakdown rows — every value carries its source, as the old /cost page did.
   const breakdown = [
     {
@@ -217,11 +246,10 @@ export default function DashboardPage() {
   ];
 
   const card =
-    "rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 flex flex-col min-h-0 overflow-hidden";
+    "rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 flex flex-col overflow-hidden";
 
   return (
-    // Adjust the calc() offset to match your app-shell header height so it fits one screen.
-    <div className="flex flex-col gap-4 lg:h-[calc(100dvh-4.75rem)]">
+    <div className="flex flex-col gap-4 pb-6">
 
       {/* Header — greeting + name, then invoice summary */}
       <header style={fade(0)}>
@@ -248,7 +276,7 @@ export default function DashboardPage() {
         <VerdictStrip d={d} />
       </div>
 
-      <div className="grid gap-4 flex-1 min-h-0 lg:grid-cols-[1fr_1.12fr] lg:grid-rows-2">
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.12fr] lg:items-start">
 
         {/* 1 — Compare banks (top N) */}
         <section className={card} style={fade(1)}>
@@ -272,7 +300,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <ul className="slim-scroll fade-bottom mt-4 flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto pr-2">
+          <ul className="slim-scroll mt-4 flex max-h-[min(520px,60vh)] flex-col gap-5 overflow-y-auto overscroll-contain py-1 pr-2">
             {ranked.map((p, i) => {
               const gap = mid - p.received;
               const isBest = i === 0;
@@ -361,16 +389,25 @@ export default function DashboardPage() {
                         style={{ color: "var(--color-warning)" }}
                       >
                         Bank wires can leave your supplier US${est.minUsd} to ${est.maxUsd} short
-                        of what this quote shows. The payment often passes through {est.hopsMin} to {est.hopsMax}{" "}
-                        correspondent banks, and each can take a fee the quote does not show.
+                        of what this quote shows.
                       </p>
                     );
                   })()}
 
                   {open && (
-                    <p className="rounded-lg bg-[var(--color-muted)] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-muted-fg)]">
-                      {DESCRIPTIONS[p.name] ?? "Provider quote from Wise Comparison API."}
-                    </p>
+                    <div className="space-y-2 rounded-lg bg-[var(--color-muted)] px-3 py-2.5 text-[11px] leading-relaxed text-[var(--color-muted-fg)]">
+                      <p>{DESCRIPTIONS[p.name] ?? "Provider quote from Wise Comparison API."}</p>
+                      {(() => {
+                        const est = estimateCorrespondentFees(p.provider_type);
+                        if (!est) return null;
+                        return (
+                          <p style={{ color: "var(--color-warning)" }}>
+                            The payment often passes through {est.hopsMin} to {est.hopsMax}{" "}
+                            correspondent banks, and each can take a fee the quote does not show.
+                          </p>
+                        );
+                      })()}
+                    </div>
                   )}
                 </li>
               );
@@ -385,7 +422,8 @@ export default function DashboardPage() {
           </p>
         </section>
 
-        {/* 2 — Best provider net + rate history */}
+        {/* 2 — Best provider net + rate history, then break-even cushion */}
+        <div className="flex flex-col gap-4">
         <section className={card} style={fade(2)}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-[var(--color-muted-fg)]">Best provider net received</span>
@@ -401,7 +439,7 @@ export default function DashboardPage() {
             {d.bestProvider.name}. Mid market rate. No hidden spread.
           </div>
 
-          <div className="flex-1 min-h-0 mt-2 -mx-2">
+          <div className="mt-4 h-[200px] -mx-2">
             <ResponsiveContainer key={cycle} width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 6, right: 8, bottom: 0, left: -28 }}>
                 <defs>
@@ -422,60 +460,41 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* 3 — Cost breakdown (same top N) */}
-        <section className={card} style={fade(3)}>
-          <span className="text-xs font-medium text-[var(--color-muted-fg)]">Cost breakdown. Where your margin goes.</span>
-
-          <div className="mt-2">
-            <div className="font-money text-3xl font-bold leading-none tabular" style={{ color: "var(--color-negative)" }}>
-              {money(spreadAnim)}
-            </div>
-            <p className="mt-1.5 text-[11px] text-[var(--color-muted-fg)]">
-              total spread lost across {slices.length} providers vs the ECB mid market
-            </p>
-          </div>
-
-          {/* Spread distribution — each segment sized by that provider's cut */}
-          <div className="mt-4 flex h-3 gap-[2px] overflow-hidden rounded-full">
-            {slices.map((s) => (
-              <span
-                key={s.name}
-                className="min-w-[3px] rounded-[2px]"
-                style={{
-                  flex: `${s.markup} 1 0`,
-                  background: "var(--color-negative)",
-                  opacity: s.opacity,
-                }}
-                title={`${s.name}: ${money(s.markup)} lost`}
-              />
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] text-[var(--color-muted-fg)]">
-            Best to worst, left to right. Full list in Compare banks.
-          </p>
-
-          {/* Every figure labelled with where it came from */}
-          <dl className="mt-4 flex flex-1 min-h-0 flex-col justify-between gap-1 border-t border-[var(--color-border)] pt-3 text-[12px]">
-            {breakdown.map((row) => (
-              <div key={row.label} className="flex items-baseline justify-between gap-3">
-                <dt className="min-w-0">
-                  <span className="block truncate text-[var(--color-fg)]">{row.label}</span>
-                  <span className="block text-[10.5px] text-[var(--color-muted-fg)]">{row.note}</span>
-                </dt>
-                <dd
-                  className="shrink-0 font-money tabular font-semibold"
-                  style={{ color: row.good ? "var(--color-primary)" : "var(--color-fg)" }}
-                >
-                  {row.value}
-                </dd>
+        <section className={card} style={fade(2)} aria-label="Break-even cushion">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <span className="text-xs font-medium text-[var(--color-muted-fg)]">Break-even cushion</span>
+              <div
+                className="mt-2 font-money text-3xl font-bold leading-none tabular"
+                style={{ color: cushionTone }}
+              >
+                {cushion.cushion_pct.toFixed(1)}%
               </div>
-            ))}
-          </dl>
+            </div>
+            <span
+              className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide"
+              style={{ color: cushionTone, background: cushionBg }}
+            >
+              {cushion.verdict === "comfortable" ? "Comfortable" : cushion.verdict === "watch" ? "Watch" : "Danger"}
+            </span>
+          </div>
+          <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--color-muted-fg)]">
+            {cushionBlurb}
+          </p>
+          <p className="mt-2 text-[11px] tabular text-[var(--color-muted-fg)]">
+            Break-even {cushion.break_even_rate.toFixed(4)}, today {d.ecbRateToday.toFixed(4)}
+          </p>
+          <Link
+            href="/breakeven"
+            className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-semibold transition-opacity hover:opacity-80"
+            style={{ color: "var(--color-primary)" }}
+          >
+            See full cushion <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </section>
 
-        {/* 4 — HalalFlow AI Advisor */}
         <section
-          className="relative rounded-2xl p-5 flex flex-col min-h-0 overflow-hidden border"
+          className="relative flex flex-col overflow-hidden rounded-2xl border p-5"
           style={{
             ...fade(4),
             borderColor: isDark ? "rgba(34,197,94,0.30)" : "rgba(22,163,74,0.30)",
@@ -484,7 +503,6 @@ export default function DashboardPage() {
               : "radial-gradient(88% 58% at 50% 103%, rgba(22,163,74,0.34), rgba(22,163,74,0.12) 38%, rgba(22,163,74,0.03) 60%, transparent 78%), linear-gradient(to top, #EAF7ED, #FFFFFF 62%)",
           }}
         >
-          {/* Decorative motes rising out of the glow */}
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
             {ADVISOR_MOTES.map((m, i) => (
               <span
@@ -506,39 +524,97 @@ export default function DashboardPage() {
           </div>
 
           <div
-            className="rounded-2xl grid place-items-center relative z-10"
+            className="relative z-10 grid place-items-center rounded-2xl"
             style={{
               width: 52, height: 52,
               background: "radial-gradient(circle at 30% 30%, #4ADE80, #16A34A)",
-              boxShadow:  isDark ? "0 0 26px rgba(34,197,94,0.45)" : "0 4px 18px rgba(22,163,74,0.35)",
+              boxShadow: isDark ? "0 0 26px rgba(34,197,94,0.45)" : "0 4px 18px rgba(22,163,74,0.35)",
             }}
           >
             <Bot className="h-6 w-6" style={{ color: "#04120A" }} />
           </div>
-          <h3 className="font-serif text-xl font-normal mt-3.5 relative z-10" style={{ color: "var(--color-fg)" }}>
+          <h3 className="relative z-10 mt-3.5 font-serif text-xl font-normal" style={{ color: "var(--color-fg)" }}>
             HalalFlow AI Advisor
           </h3>
-          <p className="text-[12.5px] leading-relaxed mt-2 relative z-10" style={{ color: "var(--color-muted-fg)" }}>
+          <p className="relative z-10 mt-2 text-[12.5px] leading-relaxed" style={{ color: "var(--color-muted-fg)" }}>
             Automated margin protection, real time rate insight, and Sharia aligned hedging guidance, grounded in cited sources, never a fatwa.
           </p>
-          <div className="flex gap-2.5 mt-auto pt-4 relative z-10">
+          <div className="relative z-10 mt-4 flex flex-wrap gap-2.5">
             <Link
               href="/ask"
-              className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
               style={{ background: "linear-gradient(135deg, #16A34A, #22C55E)", color: "#04120A" }}
             >
               <Sparkles className="h-4 w-4" /> Try now
             </Link>
             <Link
               href="/risk"
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-fg)] hover:bg-[var(--color-muted)] transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-fg)] transition-colors hover:bg-[var(--color-muted)]"
             >
               See risk <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </section>
-
+        </div>
       </div>
+
+      {/* Full-width cost breakdown */}
+      <section className={card} style={fade(3)}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-10">
+          <div className="min-w-0">
+            <span className="text-xs font-medium text-[var(--color-muted-fg)]">
+              Cost breakdown. Where your margin goes.
+            </span>
+            <div
+              className="mt-2 font-money text-3xl font-bold leading-none tabular"
+              style={{ color: "var(--color-negative)" }}
+            >
+              {money(spreadAnim)}
+            </div>
+            <p className="mt-1.5 text-[11px] text-[var(--color-muted-fg)]">
+              total spread lost across {slices.length} providers vs the ECB mid market
+            </p>
+          </div>
+          <div className="min-w-0 sm:max-w-[58%] sm:flex-1">
+            <div className="flex h-3 gap-[2px] overflow-hidden rounded-full">
+              {slices.map((s) => (
+                <span
+                  key={s.name}
+                  className="min-w-[3px] rounded-[2px]"
+                  style={{
+                    flex: `${s.markup} 1 0`,
+                    background: "var(--color-negative)",
+                    opacity: s.opacity,
+                  }}
+                  title={`${s.name}: ${money(s.markup)} lost`}
+                />
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-[var(--color-muted-fg)]">
+              Best to worst, left to right. Full list in Compare banks.
+            </p>
+          </div>
+        </div>
+
+        <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3.5 border-t border-[var(--color-border)] pt-4 text-[12px] sm:grid-cols-4 lg:grid-cols-8">
+          {breakdown.map((row) => (
+            <div key={row.label} className="min-w-0">
+              <dt>
+                <span className="block truncate text-[var(--color-fg)]">{row.label}</span>
+                <span className="mt-0.5 block truncate text-[10.5px] leading-snug text-[var(--color-muted-fg)]">
+                  {row.note}
+                </span>
+              </dt>
+              <dd
+                className="mt-1 font-money tabular font-semibold"
+                style={{ color: row.good ? "var(--color-primary)" : "var(--color-fg)" }}
+              >
+                {row.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
     </div>
   );
 }
@@ -565,11 +641,17 @@ function RateTooltip({ active, payload, label, sym, invoiceAmount }: any) {
 function DashboardSkeleton() {
   const box = "animate-pulse rounded-2xl bg-[var(--color-muted)]";
   return (
-    <div className="flex flex-col gap-4 lg:h-[calc(100dvh-4.75rem)]">
+    <div className="flex flex-col gap-4 pb-6">
       <div className={`${box} h-12 w-64`} />
-      <div className="grid gap-4 flex-1 min-h-0 lg:grid-cols-[1fr_1.12fr] lg:grid-rows-2">
-        <div className={box} /><div className={box} /><div className={box} /><div className={box} />
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.12fr] lg:items-start">
+        <div className={`${box} min-h-[420px]`} />
+        <div className="flex flex-col gap-4">
+          <div className={`${box} min-h-[280px]`} />
+          <div className={`${box} min-h-[140px]`} />
+          <div className={`${box} min-h-[180px]`} />
+        </div>
       </div>
+      <div className={`${box} min-h-[180px]`} />
     </div>
   );
 }
