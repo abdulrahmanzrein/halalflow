@@ -4,7 +4,7 @@
  * Signed in: Supabase over /api/flows. Signed out: localStorage.
  * Pages call this hook and never learn which backend answered.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Flow, FlowInput } from "@/types/flow";
 import type { FlowStore } from "@/lib/flows/store";
 import { createLocalStore, readCurrentId, writeCurrentId } from "@/lib/flows/local-store";
@@ -39,7 +39,7 @@ export function useFlows(): UseFlowsResult {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   // Stable across renders so `current` never changes identity for no reason.
-  const sampleRef = useRef<Flow>(sampleFlow());
+  const [sample] = useState(() => sampleFlow());
 
   const store: FlowStore | null = useMemo(() => {
     if (user.loading) return null;
@@ -52,13 +52,14 @@ export function useFlows(): UseFlowsResult {
     if (!store) return;
     let alive = true;
 
-    const storage = deviceStorage();
-    if (storage) setSelectedId(readCurrentId(storage));
-
     store
       .list()
       .then((list) => {
-        if (alive) setFlows(list);
+        if (!alive) return;
+        // Selection is device-local; read after mount to avoid SSR hydration mismatch.
+        const storage = deviceStorage();
+        if (storage) setSelectedId(readCurrentId(storage));
+        setFlows(list);
       })
       .catch(() => {
         if (alive) setFlows([]);
@@ -109,7 +110,7 @@ export function useFlows(): UseFlowsResult {
     [store, selectedId],
   );
 
-  const current = pickCurrentFlow(flows, selectedId) ?? sampleRef.current;
+  const current = pickCurrentFlow(flows, selectedId) ?? sample;
 
   return { flows, current, ready, mode, addFlow, selectFlow, removeFlow };
 }
