@@ -85,7 +85,7 @@ export function BreakevenCard({
             {data.cushion_pct.toFixed(1)}%
           </p>
           <p className="text-xs text-text-muted [font-feature-settings:'tnum'_1,'lnum'_1]">
-            break-even {data.break_even_rate.toFixed(4)} · today {data.today_rate.toFixed(4)}{" "}
+            break-even {data.break_even_rate.toFixed(4)}, today {data.today_rate.toFixed(4)}{" "}
             <span className="rounded-full bg-primary-highlight px-1.5 py-0.5 text-[10px] uppercase text-primary">
               live
             </span>

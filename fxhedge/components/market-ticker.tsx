@@ -94,7 +94,7 @@ export function MarketTicker() {
                 <div
                   key={q.pair}
                   className="flex shrink-0 items-center gap-2 rounded-md px-2.5 py-1.5 transition-colors hover:bg-[var(--color-muted)]"
-                  title={`${q.from}/${q.to} ${q.rate.toFixed(4)} — 30-day change`}
+                  title={`${q.from}/${q.to} ${q.rate.toFixed(4)}, 30-day change`}
                 >
                   <span className="whitespace-nowrap text-[11.5px] font-semibold text-[var(--color-fg)]">
                     {q.from}/{q.to}

@@ -199,12 +199,12 @@ export default function DashboardPage() {
       good: d.marginToday >= 0,
     },
     {
-      label: `Best — ${d.bestProvider.name}`,
+      label: `Best: ${d.bestProvider.name}`,
       note: "Wise Comparison API",
       value: money(d.bestProvider.received),
     },
     {
-      label: `Worst — ${d.worstProvider.name}`,
+      label: `Worst: ${d.worstProvider.name}`,
       note: "Wise Comparison API",
       value: money(d.worstProvider.received),
     },
@@ -226,12 +226,13 @@ export default function DashboardPage() {
       {/* Header — greeting + name, then invoice summary */}
       <header style={fade(0)}>
         <h1 className="font-serif text-3xl md:text-4xl font-normal text-[var(--color-fg)]">
-          Assalamu alaikum
-          {user.name && (
+          {user.name ? (
             <>
-              <span className="text-[var(--color-muted-fg)]">,</span>{" "}
+              Welcome back,{" "}
               <span className="text-[var(--color-primary)]">{user.name}</span>
             </>
+          ) : (
+            "Welcome back"
           )}
         </h1>
         <p className="text-[var(--color-muted-fg)] mt-2 text-sm">
@@ -252,7 +253,7 @@ export default function DashboardPage() {
         {/* 1 — Compare banks (top N) */}
         <section className={card} style={fade(1)}>
           <span className="text-xs font-medium text-[var(--color-muted-fg)]">
-            Compare banks · {ranked.length} providers · scroll for all, tap a row for detail
+            Compare banks. {ranked.length} providers. Scroll for all, tap a row for detail.
           </span>
 
           <div className="flex items-end justify-between gap-3 pb-3 mt-1 border-b border-[var(--color-border)]">
@@ -321,7 +322,7 @@ export default function DashboardPage() {
                             shown from the provider's own quote rather than derived. */}
                         {typeof p.markup_pct === "number" && (
                           <>
-                            {" · "}
+                            {". "}
                             <span
                               className="tabular font-medium"
                               style={{ color: p.markup_pct > 0 ? "var(--color-negative)" : "var(--color-primary)" }}
@@ -346,7 +347,7 @@ export default function DashboardPage() {
                     )}
                     {quoteAgeDays(p.quoted_at) > 1 && (
                       <span className="ml-1.5 text-[var(--color-warning)]">
-                        · rate quoted {quoteAgeDays(p.quoted_at)} days ago
+                        Rate quoted {quoteAgeDays(p.quoted_at)} days ago.
                       </span>
                     )}
                   </div>
@@ -359,9 +360,9 @@ export default function DashboardPage() {
                         className="text-[11px] leading-relaxed"
                         style={{ color: "var(--color-warning)" }}
                       >
-                        Bank wire — your supplier may receive US${est.minUsd}–{est.maxUsd} less
-                        than shown. It passes through {est.hopsMin}–{est.hopsMax} correspondent
-                        banks, each deducting a fee the quote cannot see.
+                        Bank wires can leave your supplier US${est.minUsd} to ${est.maxUsd} short
+                        of what this quote shows. The payment often passes through {est.hopsMin} to {est.hopsMax}{" "}
+                        correspondent banks, and each can take a fee the quote does not show.
                       </p>
                     );
                   })()}
@@ -377,10 +378,10 @@ export default function DashboardPage() {
           </ul>
 
           <p className="mt-3 shrink-0 border-t border-[var(--color-border)] pt-3 text-[10.5px] leading-relaxed text-[var(--color-muted-fg)]">
-            Correspondent estimates are a published range, not a quote —
-            US${PER_HOP_USD.min}–{PER_HOP_USD.max} per intermediary bank plus a
-            US${BENEFICIARY_USD.min}–{BENEFICIARY_USD.max} receiving fee. These are
-            not knowable before the transfer completes. Source: Airwallex.
+            Correspondent estimates are a published range, not a firm quote.
+            Expect about US${PER_HOP_USD.min} to ${PER_HOP_USD.max} per intermediary bank
+            plus a US${BENEFICIARY_USD.min} to ${BENEFICIARY_USD.max} receiving fee.
+            These are not knowable before the transfer completes. Source: Airwallex.
           </p>
         </section>
 
@@ -397,7 +398,7 @@ export default function DashboardPage() {
             {money(bestAnim)}
           </div>
           <div className="text-[11px] text-[var(--color-muted-fg)] mt-1.5">
-            {d.bestProvider.name} · mid market rate · no hidden spread
+            {d.bestProvider.name}. Mid market rate. No hidden spread.
           </div>
 
           <div className="flex-1 min-h-0 mt-2 -mx-2">
@@ -423,7 +424,7 @@ export default function DashboardPage() {
 
         {/* 3 — Cost breakdown (same top N) */}
         <section className={card} style={fade(3)}>
-          <span className="text-xs font-medium text-[var(--color-muted-fg)]">Cost breakdown · where your margin goes</span>
+          <span className="text-xs font-medium text-[var(--color-muted-fg)]">Cost breakdown. Where your margin goes.</span>
 
           <div className="mt-2">
             <div className="font-money text-3xl font-bold leading-none tabular" style={{ color: "var(--color-negative)" }}>

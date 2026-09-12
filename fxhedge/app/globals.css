@@ -400,32 +400,32 @@ body {
   .lp-live-dot { animation: none !important; }
 }
 
-/* ─── FLOWING VERSE STRIP (landing) ────────────────────────────
-   A single duplicated track translated -50% loops seamlessly.
-   Pauses on hover/focus so a passage can actually be read; under
-   reduced motion the strip becomes a plain scrollable row. */
-@keyframes verse-marquee {
+/* ─── TRUST BANNER STRIP (landing) ─────────────────────────────
+   Duplicated track translated -50% loops seamlessly.
+   Pauses on hover/focus so a line can be read; under reduced
+   motion the strip becomes a plain scrollable row. */
+@keyframes trust-banner {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
 
-.verse-marquee { overflow: hidden; }
+.trust-banner { overflow: hidden; }
 
-.verse-marquee-track {
+.trust-banner-track {
   display: flex;
   width: max-content;
-  animation: verse-marquee 80s linear infinite;
+  animation: trust-banner 55s linear infinite;
   will-change: transform;
 }
 
-.verse-marquee:hover .verse-marquee-track,
-.verse-marquee:focus-within .verse-marquee-track {
+.trust-banner:hover .trust-banner-track,
+.trust-banner:focus-within .trust-banner-track {
   animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .verse-marquee { overflow-x: auto; }
-  .verse-marquee-track { animation: none; will-change: auto; }
+  .trust-banner { overflow-x: auto; }
+  .trust-banner-track { animation: none; will-change: auto; }
 }
 
 /* B11 tagline reveal — words start muted/defocused, activate one by one

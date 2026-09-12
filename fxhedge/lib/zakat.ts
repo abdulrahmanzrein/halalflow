@@ -37,14 +37,14 @@ function methodRules(
       return {
         zakatable: false,
         reason:
-          "Doubtful debt — excluded under both methods. If you recover it later, include it in that year's pool.",
+          "Doubtful debt. Excluded under both methods. If you recover it later, include it in that year's pool.",
       };
     }
     if (method === "aaoifi" && (h.due_days ?? 0) > 0) {
       return {
         zakatable: false,
         reason:
-          "Not yet due — the AAOIFI view excludes receivables before their due date (the Hanafi view includes them). Confirm with your scholar.",
+          "Not yet due. The AAOIFI view excludes receivables before their due date (the Hanafi view includes them). Confirm with your scholar.",
       };
     }
     return { zakatable: true };

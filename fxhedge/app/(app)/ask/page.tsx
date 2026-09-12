@@ -150,8 +150,8 @@ export default function AskPage() {
               {active ? active.title : "Ask HalalFlow"}
             </h1>
             <p className="text-[12px] text-[var(--color-muted-fg)]">
-              Islamic finance questions about your {d.fromCurrency}/{d.toCurrency} payment ·
-              general education, never a fatwa
+              Questions about Islamic finance and your {d.fromCurrency}/{d.toCurrency} payment.
+              General education only, never a fatwa.
             </p>
           </div>
         </div>
@@ -265,7 +265,7 @@ export default function AskPage() {
               </button>
             </div>
             <p className="mt-2 px-1 text-[10.5px] text-[var(--color-dim)]">
-              Enter to send · Shift+Enter for a new line · history is saved on this device only
+              Press Enter to send. Shift+Enter for a new line. History stays on this device only.
             </p>
           </div>
         </div>

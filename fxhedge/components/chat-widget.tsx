@@ -279,7 +279,7 @@ export function ChatWidget() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-sm text-[var(--color-fg)]">Ask HalalFlow</p>
-            <p className="text-[11px] text-[var(--color-muted-fg)]">Islamic finance · general education only</p>
+            <p className="text-[11px] text-[var(--color-muted-fg)]">Islamic finance, general education only</p>
           </div>
           <div
             className="text-[var(--color-muted-fg)] opacity-40"
@@ -372,7 +372,7 @@ export function ChatWidget() {
             </button>
           </form>
           <p className="mt-2 text-center text-[10px] text-[var(--color-muted-fg)]">
-            Not a fatwa · Not financial advice
+            Not a fatwa. Not financial advice.
           </p>
         </div>
       </div>

@@ -150,7 +150,7 @@ export default function RiskPage() {
         <p className="mt-2 max-w-3xl text-xs leading-relaxed text-[var(--color-muted-fg)]">
           {d.driftTodayPct === 0
             ? `The rate has not moved in the ${d.daysSinceInvoiced} days since your invoice was issued.`
-            : `In the ${d.daysSinceInvoiced} days since your invoice was issued the rate has moved ${Math.abs(d.driftTodayPct)}% ${d.driftTodayPct < 0 ? "in your favour" : "against you"} — about ${money(driftMoney)} on this bill.`}{" "}
+            : `In the ${d.daysSinceInvoiced} days since your invoice was issued the rate has moved ${Math.abs(d.driftTodayPct)}% ${d.driftTodayPct < 0 ? "in your favour" : "against you"}, about ${money(driftMoney)} on this bill.`}{" "}
           The bigger question is the {swingPct}% swing that shows up in the roughest 1 in 20
           stretches, which is worth about {money(dearer - d.trueCostToday)} here.
         </p>
@@ -163,9 +163,9 @@ export default function RiskPage() {
       >
         <h2 className="font-semibold text-[var(--color-fg)]">What your bill could become</h2>
         <p className="mt-1 max-w-3xl text-xs leading-relaxed text-[var(--color-muted-fg)]">
-          We looked at every {d.daysUntilDue}-day stretch in the last 10 years — {d.histWindows} of
+          We looked at every {d.daysUntilDue}-day stretch in the last 10 years, {d.histWindows} of
           them. In the roughest 1 in 20, the rate swung {swingPct}%. That is the range below. It is
-          not a forecast; nobody can predict rates.
+          not a forecast. Nobody can predict rates.
         </p>
 
         <div className="mt-5">
@@ -245,7 +245,7 @@ export default function RiskPage() {
           sub={
             yearChangePct === null
               ? "Loading a year of history."
-              : `How far the rate has drifted since ${firstPoint ? fmtDate(firstPoint.date) : "last year"} — a feel for how jumpy this pair is.`
+              : `How far the rate has drifted since ${firstPoint ? fmtDate(firstPoint.date) : "last year"}. A feel for how jumpy this pair is.`
           }
         />
       </div>
@@ -381,7 +381,7 @@ export default function RiskPage() {
               <div className="mb-3 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-[var(--color-fg)]">
-                    {fmtDate(selected.date)} · rate {selected.rate.toFixed(4)}
+                    {fmtDate(selected.date)}, rate {selected.rate.toFixed(4)}
                   </p>
                   <p className="mt-0.5 text-xs text-[var(--color-muted-fg)]">
                     Had you paid on this day
@@ -427,7 +427,7 @@ export default function RiskPage() {
                 {selected.diff > 0
                   ? "The rate was worse for you then than it is now. Today is the better of the two."
                   : selected.diff < 0
-                  ? "The rate was better for you then than it is now — a reminder of how far it can move against you."
+                  ? "The rate was better for you then than it is now. A reminder of how far it can move against you."
                   : "The rate that day was the same as today's."}
               </p>
             </div>

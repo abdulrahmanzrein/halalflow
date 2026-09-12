@@ -29,7 +29,7 @@ export function NaturalHedgeCard({ flows }: { flows: Flow[] }) {
         <div className="text-sm text-[var(--color-muted-fg)] leading-relaxed">
           <p>
             If money comes in and goes out in the same currency, you can settle one
-            against the other instead of converting twice — paying no spread and no
+            against the other instead of converting twice. You pay no spread and no
             fee on the overlap. It is the cheapest hedge there is, and it needs no
             contract.
           </p>

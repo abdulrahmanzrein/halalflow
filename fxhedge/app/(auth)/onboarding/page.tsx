@@ -86,7 +86,7 @@ export default function OnboardingPage() {
       <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-8">
         <h1 className="text-xl font-semibold text-[var(--color-fg)] mb-1">Tell us about your business</h1>
         <p className="text-sm text-[var(--color-muted-fg)] mb-6">
-          Step 2 of 2 — this sets up your dashboard. You can change any of it later.
+          Step 2 of 2. This sets up your dashboard. You can change any of it later.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -143,7 +143,7 @@ export default function OnboardingPage() {
 
           {sameCurrency && (
             <p className="text-xs" style={{ color: "var(--color-negative)" }}>
-              Pick two different currencies — there is no FX risk if they match.
+              Pick two different currencies. There is no FX risk if they match.
             </p>
           )}
 

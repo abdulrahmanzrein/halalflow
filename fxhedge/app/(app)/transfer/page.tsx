@@ -462,7 +462,6 @@ export default function TransferPage() {
                             : `${inv.currency}→${inv.home_currency}`}
                         </span>
                         <span className="tabular">{daysUntilDue(inv)}d left</span>
-                        <span aria-hidden="true">·</span>
                         <span>{fmtWhen(inv.created_at)}</span>
                       </div>
                     </button>

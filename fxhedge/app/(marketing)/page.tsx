@@ -17,7 +17,7 @@ const features = [
   },
   {
     title: "Ask before you hedge",
-    desc:  "HalalFlow Assistant explains murabaha, wa'd, and natural hedges with cited sources — educational guidance, not a fatwa.",
+    desc:  "HalalFlow Assistant explains murabaha, wa'd, and natural hedges with cited sources. Educational guidance only, not a fatwa.",
   },
 ];
 
@@ -28,74 +28,53 @@ function subscribeNever(): () => void {
 
 const TAGLINE = "Trade honestly. See the cost before you pay it.";
 
-/**
- * Sourced passages for the flowing strip. Quran — Sahih International;
- * hadith as cited. Never paraphrase scripture: quote a named translation
- * or leave it out.
- */
-const VERSES = [
+/** Universal trust points for any importer — not faith-specific. */
+const TRUST_POINTS = [
   {
-    ref: "Quran 2:275",
-    ar: "وَأَحَلَّ اللَّهُ الْبَيْعَ وَحَرَّمَ الرِّبَا",
-    en: "But Allah has permitted trade and has forbidden riba.",
+    label: "Hidden markup",
+    text: "Banks bake FX spread into the rate. We show the gap against mid market.",
   },
   {
-    ref: "Quran 2:276",
-    ar: "يَمْحَقُ اللَّهُ الرِّبَا وَيُرْبِي الصَّدَقَاتِ",
-    en: "Allah destroys riba and gives increase to charities.",
+    label: "What arrives",
+    text: "Compare providers by what your supplier actually receives, not the headline rate.",
   },
   {
-    ref: "Hadith · Sahih Muslim",
-    ar: "لَعَنَ رَسُولُ اللَّهِ ﷺ آكِلَ الرِّبَا وَمُؤْكِلَهُ",
-    en: "The Prophet ﷺ cursed the one who consumes riba and the one who pays it.",
+    label: "No money moved",
+    text: "HalalFlow never sends a payment. Numbers and guidance only.",
   },
   {
-    ref: "Quran 3:130",
-    ar: "يَا أَيُّهَا الَّذِينَ آمَنُوا لَا تَأْكُلُوا الرِّبَا أَضْعَافًا مُضَاعَفَةً",
-    en: "Do not consume riba, doubled and multiplied, but fear Allah that you may be successful.",
-  },
-  {
-    ref: "Hadith · Sahih Muslim",
-    ar: "الذَّهَبُ بِالذَّهَبِ وَالْفِضَّةُ بِالْفِضَّةِ... يَدًا بِيَدٍ",
-    en: "Gold for gold, silver for silver, hand to hand — the standard on fair exchange.",
-  },
-  {
-    ref: "Quran 2:278–279",
-    ar: "وَاتَّقُوا اللَّهَ وَذَرُوا مَا بَقِيَ مِنَ الرِّبَا إِن كُنتُم مُّؤْمِنِينَ",
-    en: "Fear Allah and give up what remains of riba, if you should be believers.",
+    label: "Margin first",
+    text: "See how a rate move hits your deal before you wire a cent.",
   },
 ];
 
-/** Flowing strip of scripture on honest trade — pauses on hover so a passage can be read. */
-function VerseMarquee() {
+/** Full-width strip of plain-language FX truths for every importer. */
+function TrustBanner() {
   return (
     <section
-      aria-label="Verses and hadith on honest trade"
-      className="verse-marquee border-y"
+      aria-label="Why opaque FX costs matter"
+      className="trust-banner border-y"
       style={{ borderColor: "var(--color-border)", background: "var(--color-card)" }}
     >
-      {/* Track holds two copies; the CSS animation translates exactly -50% for a seamless loop */}
-      <div className="verse-marquee-track py-6">
+      <div className="trust-banner-track py-5">
         {[0, 1].map((copy) => (
           <div key={copy} className="flex shrink-0 items-stretch" aria-hidden={copy === 1}>
-            {VERSES.map((v) => (
-              <figure key={`${copy}-${v.ref}`} className="m-0 mx-6 w-[400px] shrink-0">
-                <blockquote className="m-0">
-                  <p
-                    lang="ar"
-                    dir="rtl"
-                    className="font-arabic text-right text-xl m-0 text-[var(--color-fg)]"
-                  >
-                    {v.ar}
-                  </p>
-                  <p className="text-pretty mt-2 m-0 text-sm leading-relaxed text-[var(--color-muted-fg)]">
-                    &ldquo;{v.en}&rdquo;
-                  </p>
-                </blockquote>
-                <figcaption className="mt-2 text-xs uppercase tracking-widest" style={{ color: "var(--color-primary)" }}>
-                  {v.ref}
-                </figcaption>
-              </figure>
+            {TRUST_POINTS.map((p) => (
+              <div
+                key={`${copy}-${p.label}`}
+                className="mx-5 flex w-[320px] shrink-0 flex-col justify-center border-l pl-5"
+                style={{ borderColor: "var(--color-border)" }}
+              >
+                <p
+                  className="m-0 text-[11px] font-semibold uppercase tracking-widest"
+                  style={{ color: "var(--color-primary)" }}
+                >
+                  {p.label}
+                </p>
+                <p className="mt-1.5 m-0 text-sm leading-relaxed text-[var(--color-muted-fg)]">
+                  {p.text}
+                </p>
+              </div>
             ))}
           </div>
         ))}
@@ -157,7 +136,7 @@ export default function LandingPage() {
         style={{ background: "linear-gradient(90deg, #16A34A 0%, #22C55E 55%, #4ADE80 100%)" }}
       >
         <a href="#features" className="inline-flex items-center gap-2 font-medium group">
-          <span>New. Halal finance comparison is now live</span>
+          <span>New. Live FX cost comparison for importers</span>
           <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
         </a>
       </div>
@@ -281,7 +260,7 @@ export default function LandingPage() {
             </div>
 
             <p className="lp-reveal lp-d4 mt-5 text-xs text-[var(--color-muted-fg)] opacity-70">
-              No card required · No money moved · Not financial advice
+              No card required. No money moved. Not financial advice.
             </p>
           </div>
 
@@ -313,7 +292,7 @@ export default function LandingPage() {
                   className="lp-live-dot h-1.5 w-1.5 rounded-full"
                   style={{ background: "#22C55E", boxShadow: "0 0 8px #22C55E" }}
                 />
-                Realized savings · last 90 days
+                Savings over the last 90 days
               </div>
               <div className="text-xs text-[var(--color-fg)] mb-2.5">Across 14 transfers</div>
 
@@ -352,8 +331,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Flowing verses + hadith ───────────────────────────── */}
-      <VerseMarquee />
+      {/* ── Trust banner ──────────────────────────────────────── */}
+      <TrustBanner />
 
       {/* ── Tagline reveal ─────────────────────────────────────── */}
       <section className="py-20" aria-label="Why HalalFlow exists">
@@ -385,7 +364,7 @@ export default function LandingPage() {
             How it works
           </h2>
           <p className="sr-fade mt-3.5 max-w-lg text-[15px] text-[var(--color-muted-fg)]">
-            Three steps, about a minute. We never touch your money — you still pay
+            Three steps, about a minute. We never touch your money. You still pay
             through whichever provider you choose.
           </p>
 
@@ -399,7 +378,7 @@ export default function LandingPage() {
               {
                 n: "2",
                 title: "See the real cost",
-                body: "We price it at the ECB reference rate, then show what each provider would actually deliver — including the markup they bury in the rate.",
+                body: "We price it at the ECB reference rate, then show what each provider would actually deliver, including the markup they bury in the rate.",
               },
               {
                 n: "3",

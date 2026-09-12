@@ -30,7 +30,7 @@ const CURRENCIES = ["CAD", "USD", "EUR", "GBP", "AED", "TRY"];
 const ACCENT = "#3DD68C";
 
 const METHOD_LABEL: Record<MadhhabMethod, string> = {
-  aaoifi: "AAOIFI · Standard No. 35",
+  aaoifi: "AAOIFI, Standard No. 35",
   hanafi: "Hanafi view",
 };
 
@@ -327,7 +327,7 @@ export default function ZakatPage() {
             {/* Nisab needs a gold price, and no keyless feed publishes one — so it is asked for, and labelled as such. */}
             <div className="px-6 pb-4 shrink-0">
               <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-4">
-                <FieldLabel label={`Gold price per gram (${home}) — you enter this`}>
+                <FieldLabel label={`Gold price per gram (${home}), you enter this`}>
                   <input
                     aria-label={`Gold price per gram in ${home}`}
                     type="number"
@@ -340,7 +340,7 @@ export default function ZakatPage() {
                   />
                 </FieldLabel>
                 <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--color-muted-fg)]">
-                  Nisab is the value of {NISAB_GOLD_GRAMS}g of gold — below it, no zakat is due.
+                  Nisab is the value of {NISAB_GOLD_GRAMS}g of gold. Below it, no zakat is due.
                   Check today&apos;s price with your local dealer.
                   {goldValid && (
                     <> Yours works out to{" "}
@@ -355,7 +355,7 @@ export default function ZakatPage() {
               {ratesError && (
                 <p className="mt-3 text-xs" style={{ color: "var(--color-negative)" }}>
                   Could not load today&apos;s exchange rates. Foreign holdings cannot be valued until
-                  they load — check your connection and refresh.
+                  they load. Check your connection and refresh.
                 </p>
               )}
               {!ratesError && missingRates.length > 0 && rates !== null && (
@@ -370,7 +370,7 @@ export default function ZakatPage() {
               <span className="text-sm text-[var(--color-muted-fg)] tabular">
                 {holdings.length} holding{holdings.length === 1 ? "" : "s"}
                 {rateDate && !ratesError && (
-                  <span className="text-[var(--color-dim)]"> · rates {rateDate}</span>
+                  <span className="text-[var(--color-dim)]">, rates {rateDate}</span>
                 )}
               </span>
               <button
@@ -465,7 +465,7 @@ function ZakatDue({
         style={{ background: `radial-gradient(circle, ${hexA(ACCENT, 0.14)}, transparent 70%)` }}
       />
       <p className="text-xs text-[var(--color-muted-fg)] relative">
-        Zakat due · {METHOD_LABEL[result.method]}
+        Zakat due, {METHOD_LABEL[result.method]}
       </p>
       <p
         className="relative text-4xl font-semibold tabular leading-none mt-2"
@@ -524,7 +524,7 @@ function ZakatDue({
         <span className="tabular font-semibold text-[17px] text-[var(--color-fg)]">{money(pool, home)}</span>
       </div>
       <p className="text-[11px] text-[var(--color-muted-fg)] opacity-60 mt-3 text-right">
-        Rates as of {result.rate_date} · live ECB reference
+        Rates as of {result.rate_date}, live ECB reference
       </p>
 
       <style jsx>{`@keyframes zk-bar { from { width: 0 } }`}</style>

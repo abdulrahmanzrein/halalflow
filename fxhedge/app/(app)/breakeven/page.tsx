@@ -91,7 +91,7 @@ export default function BreakevenPage() {
               </p>
               <p className="mt-2 text-sm text-[var(--color-muted-fg)]">
                 Breakeven rate: <span className="font-money font-semibold text-[var(--color-fg)] tabular">{be.break_even_rate.toFixed(4)}</span>
-                {" "}· Today: <span className="font-money font-semibold text-[var(--color-fg)] tabular">{be.today_rate.toFixed(4)}</span>
+                . Today: <span className="font-money font-semibold text-[var(--color-fg)] tabular">{be.today_rate.toFixed(4)}</span>
               </p>
             </div>
             <span

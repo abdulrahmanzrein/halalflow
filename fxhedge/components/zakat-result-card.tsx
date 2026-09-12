@@ -29,8 +29,8 @@ export function ZakatResultCard({ result, home }: { result: ZakatResult; home: s
           </p>
           <p className="mt-1 text-sm text-text-muted">
             {result.nisab_met
-              ? `2.5% of your zakatable pool — nisab met (threshold ${money(result.nisab_threshold, home)})`
-              : `Below the nisab threshold (${money(result.nisab_threshold, home)}) — nothing due this year`}
+              ? `2.5% of your zakatable pool. Nisab met (threshold ${money(result.nisab_threshold, home)})`
+              : `Below the nisab threshold (${money(result.nisab_threshold, home)}). Nothing due this year`}
           </p>
         </div>
         <div className="text-right text-xs text-text-faint">
@@ -56,10 +56,10 @@ export function ZakatResultCard({ result, home }: { result: ZakatResult; home: s
                 key={h.id}
                 className={`border-b border-divider ${h.zakatable ? "" : "opacity-55"}`}
               >
-                <td className="py-2 pr-2 font-medium">{h.label || "—"}</td>
+                <td className="py-2 pr-2 font-medium">{h.label || "n/a"}</td>
                 <td className="py-2 pr-2 text-xs">{h.kind.replace("_", " ")}</td>
                 <td className="py-2 pr-2 text-right [font-feature-settings:'tnum'_1,'lnum'_1]">
-                  {h.currency === home ? "—" : `${h.currency} `}
+                  {h.currency === home ? "" : `${h.currency} `}
                   {h.amount.toLocaleString()}
                 </td>
                 <td className="py-2 pr-2 text-right text-xs text-text-muted [font-feature-settings:'tnum'_1,'lnum'_1]">
@@ -92,7 +92,7 @@ export function ZakatResultCard({ result, home }: { result: ZakatResult; home: s
 
       <p className="rounded-md bg-surface-2 p-3 text-xs text-text-muted">
         This is general education, not a fatwa. Scholars legitimately differ on
-        receivables timing (AAOIFI Standard No. 9 vs the Hanafi view) — this tool
+        receivables timing (AAOIFI Standard No. 9 vs the Hanafi view). This tool
         shows both. Confirm the numbers with a qualified scholar before paying.
       </p>
     </section>

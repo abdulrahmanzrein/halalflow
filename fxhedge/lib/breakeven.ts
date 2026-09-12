@@ -41,13 +41,13 @@ export function computeBreakEven(input: BreakEvenInput): BreakEvenResult {
     verdict_reason = `At today's rate this deal already loses money before the market moves at all. There is no cushion left, and history shows windows moving ${worst5pctMove.toFixed(1)}%+ (worst on record ${worstOnRecord.toFixed(1)}%). Repricing the sale or paying now is worth a serious look.`;
   } else if (cushion_pct > 2 * worst5pctMove) {
     verdict = "comfortable";
-    verdict_reason = `Your rate can move ${cushion_pct.toFixed(1)}% against you before you lose money. History says only 5% of similar windows move more than ${worst5pctMove.toFixed(1)}% — your cushion covers that twice over.`;
+    verdict_reason = `Your rate can move ${cushion_pct.toFixed(1)}% against you before you lose money. History says only 5% of similar windows move more than ${worst5pctMove.toFixed(1)}%. Your cushion covers that twice over.`;
   } else if (cushion_pct > worst5pctMove) {
     verdict = "watch";
-    verdict_reason = `Your cushion is ${cushion_pct.toFixed(1)}% — history says 5% of similar windows move ${worst5pctMove.toFixed(1)}%+, so a bad week eats most of it. Worth checking weekly.`;
+    verdict_reason = `Your cushion is ${cushion_pct.toFixed(1)}%. History says 5% of similar windows move ${worst5pctMove.toFixed(1)}%+, so a bad week eats most of it. Worth checking weekly.`;
   } else {
     verdict = "danger";
-    verdict_reason = `Only ${cushion_pct.toFixed(1)}% of cushion remains and history shows windows moving ${worst5pctMove.toFixed(1)}%+ (worst on record ${worstOnRecord.toFixed(1)}%). You are inside the danger zone — consider acting now.`;
+    verdict_reason = `Only ${cushion_pct.toFixed(1)}% of cushion remains and history shows windows moving ${worst5pctMove.toFixed(1)}%+ (worst on record ${worstOnRecord.toFixed(1)}%). You are inside the danger zone. Consider acting now.`;
   }
 
   return {

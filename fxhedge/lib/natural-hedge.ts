@@ -33,7 +33,7 @@ export interface NaturalHedgeResult {
 }
 
 export const NATURAL_HEDGE_DISCLAIMER =
-  "Netting flows avoids conversion but is still a settlement decision — confirm the arrangement with your scholar and keep both invoices documented.";
+  "Netting flows avoids conversion but is still a settlement decision. Confirm the arrangement with your scholar and keep both invoices documented.";
 
 export function detectNaturalHedges(flows: CurrencyFlow[]): NaturalHedgeResult {
   const usable = flows.filter((f) => f.amount > 0);
@@ -66,8 +66,8 @@ export function detectNaturalHedges(flows: CurrencyFlow[]): NaturalHedgeResult {
       incoming_ids: incoming.map((f) => f.id),
       suggestion:
         netted >= Math.max(outTotal, inTotal)
-          ? `Your ${currency} flows fully cover each other (${netted.toLocaleString()} ${currency}) — settle them against each other and skip the FX conversion entirely.`
-          : `Net ${netted.toLocaleString()} ${currency} of these flows against each other before converting the remainder — you avoid paying the spread and fees on that amount twice.`,
+          ? `Your ${currency} flows fully cover each other (${netted.toLocaleString()} ${currency}). Settle them against each other and skip the FX conversion entirely.`
+          : `Net ${netted.toLocaleString()} ${currency} of these flows against each other before converting the remainder. You avoid paying the spread and fees on that amount twice.`,
     });
   }
 
@@ -85,11 +85,11 @@ export function detectNaturalHedges(flows: CurrencyFlow[]): NaturalHedgeResult {
   const summary =
     matches.length === 0
       ? remainingTotal > 0
-        ? `No natural hedge found — ${remainingDetail || `${remainingTotal.toLocaleString()}`} of foreign-currency payments still need a conversion decision.`
+        ? `No natural hedge found. ${remainingDetail || `${remainingTotal.toLocaleString()}`} of foreign-currency payments still need a conversion decision.`
         : "No foreign-currency exposure to hedge right now."
       : unmatched.length === 0
-        ? `Good news: your ${currencyList(matches)} flows net fully against each other — you may not need to convert anything.`
-        : `You can naturally hedge ${matchesSummary(matches)} — but ${remainingDetail} (${remainingTotal.toLocaleString()} total) still needs attention.`;
+        ? `Good news: your ${currencyList(matches)} flows net fully against each other. You may not need to convert anything.`
+        : `You can naturally hedge ${matchesSummary(matches)}, but ${remainingDetail} (${remainingTotal.toLocaleString()} total) still needs attention.`;
 
   return { matches, unmatched, summary, disclaimer: NATURAL_HEDGE_DISCLAIMER };
 }

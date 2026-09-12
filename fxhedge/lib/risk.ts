@@ -46,14 +46,14 @@ export function decidePayNowOrWait(input: DecisionInput): RiskDecision {
     return {
       decision: "marginal",
       decision_reason:
-        "Not enough historical data to advise either way — treat both options as open.",
+        "Not enough historical data to advise either way. Treat both options as open.",
     };
   }
 
   if (driftTodayPct > 2) {
     return {
       decision: "pay_now",
-      decision_reason: `The rate has already moved ${driftTodayPct.toFixed(1)}% against you since the invoice was priced. Waiting has historically cost importers up to ${worstOnRecord.toFixed(1)}% over this window — locking in now protects what margin remains.`,
+      decision_reason: `The rate has already moved ${driftTodayPct.toFixed(1)}% against you since the invoice was priced. Waiting has historically cost importers up to ${worstOnRecord.toFixed(1)}% over this window. Locking in now protects what margin remains.`,
     };
   }
 
@@ -66,7 +66,7 @@ export function decidePayNowOrWait(input: DecisionInput): RiskDecision {
 
   return {
     decision: "marginal",
-    decision_reason: `Drift is small (${driftTodayPct.toFixed(1)}%) but history shows 5% of similar windows moved ${worst5pctMove.toFixed(1)}%+ against importers — the tail risk is real, so decide with your margin floor in mind.`,
+    decision_reason: `Drift is small (${driftTodayPct.toFixed(1)}%) but history shows 5% of similar windows moved ${worst5pctMove.toFixed(1)}%+ against importers. The tail risk is real, so decide with your margin floor in mind.`,
   };
 }
 

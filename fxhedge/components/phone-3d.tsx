@@ -215,7 +215,7 @@ export function Phone3D({
         // Footer notes
         const my = sy + 112;
         g.fillStyle = p.hint; g.font = "500 18px 'Inter',sans-serif";
-        g.fillText("Read only · HalalFlow never moves your money", 36, my);
+        g.fillText("Read only. HalalFlow never moves your money", 36, my);
         g.fillStyle = "rgba(34,197,94,.9)"; g.beginPath(); g.arc(44, my + 34, 5, 0, 7); g.fill();
         g.fillStyle = p.muted; g.fillText("Halal options: murabaha, wa’d", 60, my + 40);
 

@@ -9,7 +9,7 @@ export default function SignUpPage() {
       </Link>
       <div className="w-full max-w-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-8">
         <h1 className="text-xl font-semibold text-[var(--color-fg)] mb-1">Create your account</h1>
-        <p className="text-sm text-[var(--color-muted-fg)] mb-6">Step 1 of 2 — your details</p>
+        <p className="text-sm text-[var(--color-muted-fg)] mb-6">Step 1 of 2. Your details.</p>
         <AuthForm defaultTab="signup" />
       </div>
       <p className="mt-4 text-sm text-[var(--color-muted-fg)]">
