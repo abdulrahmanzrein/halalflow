@@ -41,8 +41,8 @@ const admin = createClient(url, service);
 // 1. Schema exists (service role bypasses RLS)
 const schema = await admin.from("profiles").select("user_id").limit(1);
 check("schema: profiles table reachable", !schema.error, schema.error?.message);
-const scenarios = await admin.from("scenarios").select("id").limit(1);
-check("schema: scenarios table reachable", !scenarios.error, scenarios.error?.message);
+const flows = await admin.from("flows").select("id").limit(1);
+check("schema: flows table reachable", !flows.error, flows.error?.message);
 
 // 2. Create confirmed user A via admin API (independent of the project's
 //    email-confirmation setting; the on_auth_user_created trigger still fires)

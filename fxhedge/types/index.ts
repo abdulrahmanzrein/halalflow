@@ -14,18 +14,6 @@ export interface Profile {
   updated_at: string;
 }
 
-export interface Scenario {
-  id: string;
-  user_id: string;
-  label: string;
-  amount: number;
-  pair: string;                 // "EUR-CAD"
-  revenue: number;
-  days_ago: number;
-  target_margin: number;
-  saved_at: string;
-}
-
 export interface FXRate {
   pair: string;                 // "EUR-CAD"
   from: string;                 // "EUR"
