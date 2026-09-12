@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { MOCK_PROFILE } from "@/lib/fixtures";
+import { useAppData } from "@/hooks/use-app-data";
+import { dealContextFromSnapshot } from "@/lib/assistant/deal-context";
 import { MessageCircle, X, Send, Sparkles, GripVertical } from "lucide-react";
 
 interface Message {
@@ -33,6 +34,7 @@ function clamp(v: number, min: number, max: number) {
 
 export function ChatWidget() {
 
+  const deal = useAppData();
   const [open, setOpen]         = useState(false);
   const [pos, setPos]           = useState<Pos>(DEFAULT_POS);
   const [ready, setReady]       = useState(false);
@@ -155,8 +157,7 @@ export function ChatWidget() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           question: q,
-          pair:   `${MOCK_PROFILE.supplier_currency}-${MOCK_PROFILE.home_currency}`,
-          amount: MOCK_PROFILE.invoice_amount,
+          ...dealContextFromSnapshot(deal),
         }),
       });
       const data = await res.json();

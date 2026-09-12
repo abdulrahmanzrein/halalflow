@@ -10,6 +10,7 @@ import type { FlowStore } from "@/lib/flows/store";
 import { createLocalStore, readCurrentId, writeCurrentId } from "@/lib/flows/local-store";
 import { createApiStore } from "@/lib/flows/api-store";
 import { pickCurrentFlow, sampleFlow } from "@/lib/flows/flow";
+import { migrateGuestFlows } from "@/lib/flows/migrate";
 import { useUser } from "./use-user";
 
 export interface UseFlowsResult {
@@ -50,28 +51,33 @@ export function useFlows(): UseFlowsResult {
 
   useEffect(() => {
     if (!store) return;
+    const activeStore = store;
     let alive = true;
 
-    store
-      .list()
-      .then((list) => {
+    async function load() {
+      try {
+        const storage = deviceStorage();
+        if (user.signedIn && storage) {
+          await migrateGuestFlows(createLocalStore(storage), activeStore);
+        }
+        const list = await activeStore.list();
         if (!alive) return;
         // Selection is device-local; read after mount to avoid SSR hydration mismatch.
-        const storage = deviceStorage();
         if (storage) setSelectedId(readCurrentId(storage));
         setFlows(list);
-      })
-      .catch(() => {
+      } catch {
         if (alive) setFlows([]);
-      })
-      .finally(() => {
+      } finally {
         if (alive) setReady(true);
-      });
+      }
+    }
+
+    load();
 
     return () => {
       alive = false;
     };
-  }, [store]);
+  }, [store, user.signedIn]);
 
   const addFlow = useCallback(
     async (input: FlowInput) => {

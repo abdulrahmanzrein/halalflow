@@ -33,6 +33,8 @@ export interface ProviderQuote {
   markup_pct?: number;
   /** When the provider's rate was collected — quotes are not all same-day. */
   quoted_at?: string;
+  /** "bank" routes through correspondent banks; "moneyTransferProvider" does not. */
+  provider_type?: "bank" | "moneyTransferProvider";
   logo?: string;
 }
 

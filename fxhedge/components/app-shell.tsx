@@ -16,6 +16,7 @@ import {
 import { ChatWidget } from "@/components/chat-widget";
 import { HalalFlowLogo } from "@/components/halalflow-logo";
 import { MarketTicker } from "@/components/market-ticker";
+import { useFlows } from "@/hooks/use-flows";
 import { useState, useRef, useEffect, forwardRef } from "react";
 
 const NAV_GROUPS = [
@@ -74,9 +75,11 @@ const NavItem = forwardRef<
 function Sidebar({
   onNav,
   firstItemRef,
+  mode,
 }: {
   onNav?: () => void;
   firstItemRef?: React.Ref<HTMLAnchorElement>;
+  mode: "guest" | "account";
 }) {
   return (
     <div className="flex h-full flex-col py-4">
@@ -114,15 +117,25 @@ function Sidebar({
       {/* Sidebar footer — theme + sign out */}
       <div className="mt-4 px-3 pt-3 border-t border-[var(--color-border)] flex items-center gap-2">
         <ThemeToggle />
-        <form action={signOutAction} className="flex-1">
-          <button
-            type="submit"
-            className="w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm text-[var(--color-muted-fg)] hover:bg-[var(--color-muted)] hover:text-[var(--color-fg)] transition-[color,background-color,scale] duration-150 active:scale-[0.96]"
+        {mode === "account" ? (
+          <form action={signOutAction} className="flex-1">
+            <button
+              type="submit"
+              className="w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm text-[var(--color-muted-fg)] hover:bg-[var(--color-muted)] hover:text-[var(--color-fg)] transition-[color,background-color,scale] duration-150 active:scale-[0.96]"
+            >
+              <LogOut size={16} />
+              Sign out
+            </button>
+          </form>
+        ) : (
+          <Link
+            href="/signup"
+            onClick={onNav}
+            className="flex-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--color-muted)] transition-[color,background-color,scale] duration-150 active:scale-[0.96]"
           >
-            <LogOut size={16} />
-            Sign out
-          </button>
-        </form>
+            Create account
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -132,6 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const firstNavRef = useRef<HTMLAnchorElement>(null);
+  const { mode } = useFlows();
 
   useEffect(() => {
     if (mobileOpen) firstNavRef.current?.focus();
@@ -163,7 +177,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Desktop sidebar */}
       <aside className="hidden min-[920px]:flex w-[248px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-card)]">
-        <Sidebar />
+        <Sidebar mode={mode} />
       </aside>
 
       {/* Mobile sidebar overlay */}
@@ -181,7 +195,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             aria-modal="true"
             aria-label="Navigation"
           >
-            <Sidebar onNav={closeSidebar} firstItemRef={firstNavRef} />
+            <Sidebar onNav={closeSidebar} firstItemRef={firstNavRef} mode={mode} />
           </aside>
         </div>
       )}
@@ -206,6 +220,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </button>
 
         <MarketTicker />
+
+        {mode === "guest" && (
+          <div
+            role="status"
+            className="border-b px-6 py-2 text-center text-xs text-[var(--color-muted-fg)]"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-muted)" }}
+          >
+            You&apos;re exploring HalalFlow on this device.{" "}
+            <Link href="/signup" className="font-medium text-[var(--color-primary)] hover:underline">
+              Create a free account
+            </Link>{" "}
+            to keep your invoices after you close the browser.
+          </div>
+        )}
 
         <main id="main-content" className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[1180px] px-6 py-4">{children}</div>

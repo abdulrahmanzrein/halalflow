@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAppData } from "@/hooks/use-app-data";
 import { useChats, groupByDay, type ChatMessage } from "@/hooks/use-chats";
+import { dealContextFromSnapshot } from "@/lib/assistant/deal-context";
 import { Markdown } from "@/components/markdown";
 import { ArrowUp, Plus, Sparkles, Trash2, PanelLeft } from "lucide-react";
 
@@ -45,9 +46,7 @@ export default function AskPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           question: q,
-          pair: `${d.fromCurrency}-${d.toCurrency}`,
-          amount: d.invoiceAmount,
-          margin_at_risk: d.marginAtRiskMinus5pct,
+          ...dealContextFromSnapshot(d),
         }),
       });
       const data: { answer?: string; error?: boolean } = await res.json();

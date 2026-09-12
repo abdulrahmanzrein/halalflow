@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeTrueCost, computeMargin, buildCostBreakdown } from "../cost";
+import { computeTrueCost, computeMargin, buildCostBreakdown, impliedRevenue } from "../cost";
 import type { ProviderQuote } from "@/types";
 
 // Fixture numbers from dev2_CONTEXT.md SAMPLE (the verified prototype)
@@ -28,6 +28,30 @@ describe("computeMargin", () => {
   });
   it("zero revenue is safe, not NaN", () => {
     expect(computeMargin(0, 100)).toBe(-100);
+  });
+});
+
+describe("impliedRevenue", () => {
+  it("prices the deal at the invoice-day rate plus the target margin", () => {
+    // 12000 × 1.6049 × 1.10 = 21184.68 — Aisha's sample economics
+    expect(impliedRevenue(12000, 1.6049, 10)).toBe(21184.68);
+  });
+
+  it("rounds to cents rather than leaking IEEE remainder", () => {
+    expect(impliedRevenue(1000, 1.3333, 10)).toBe(1466.63);
+  });
+
+  it("returns 0 for a non-positive rate so a missing FX quote cannot invent revenue", () => {
+    expect(impliedRevenue(12000, 0, 10)).toBe(0);
+    expect(impliedRevenue(12000, -1, 10)).toBe(0);
+  });
+
+  it("returns 0 for a non-positive invoice", () => {
+    expect(impliedRevenue(0, 1.6, 10)).toBe(0);
+  });
+
+  it("treats a missing margin as zero rather than NaN", () => {
+    expect(impliedRevenue(1000, 2, Number.NaN)).toBe(2000);
   });
 });
 

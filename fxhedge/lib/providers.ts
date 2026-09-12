@@ -26,6 +26,7 @@ interface WiseQuote {
 interface WiseProvider {
   name?: string;
   alias?: string;
+  type?: string;
   quotes?: WiseQuote[];
   logos?: { png?: string[]; svg?: string[] };
 }
@@ -37,6 +38,7 @@ export interface NormalizedQuote {
   transfer_fee?: number;
   markup_pct?: number;
   quoted_at?: string;
+  provider_type?: "bank" | "moneyTransferProvider";
   logo?: string;
 }
 
@@ -64,6 +66,9 @@ export function normalizeProviders(raw: WiseProvider[]): NormalizedQuote[] {
         markup_pct:
           typeof q.markup === "number" ? Math.round(q.markup * 100) / 100 : undefined,
         quoted_at: typeof q.dateCollected === "string" ? q.dateCollected : undefined,
+        // The API tells us who is a bank; a hardcoded list would rot.
+        provider_type:
+          p.type === "bank" || p.type === "moneyTransferProvider" ? p.type : undefined,
         logo: p.logos?.png?.[0] ?? p.logos?.svg?.[0],
       };
       if (!best || candidate.received > best.received) best = candidate;

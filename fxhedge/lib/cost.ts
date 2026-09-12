@@ -29,6 +29,22 @@ export function computeMargin(revenue: number, cost: number): number {
   return ((revenue - cost) / revenue) * 100;
 }
 
+/**
+ * What the importer quoted their customer: invoice at the invoice-day
+ * reference rate, plus the target margin from their profile.
+ * Rounded to cents so the dashboard and the breakeven engine see one number.
+ */
+export function impliedRevenue(
+  invoiceAmount: number,
+  invoiceDayRate: number,
+  targetMarginPct: number,
+): number {
+  if (!Number.isFinite(invoiceAmount) || invoiceAmount <= 0) return 0;
+  if (!Number.isFinite(invoiceDayRate) || invoiceDayRate <= 0) return 0;
+  const margin = Number.isFinite(targetMarginPct) ? targetMarginPct : 0;
+  return Math.round(invoiceAmount * invoiceDayRate * (1 + margin / 100) * 100) / 100;
+}
+
 export interface CostBreakdownInput {
   invoiceAmount: number;
   revenue: number;

@@ -1,12 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED_PREFIXES = [
-  "/dashboard",
-  "/transfer",
-  "/risk",
-  "/zakat",
-];
+// The product itself is usable signed-out (local FlowStore). Only onboarding
+// needs an account, because it writes the Supabase profile.
+const PROTECTED_PREFIXES = ["/onboarding"];
 
 const AUTH_ROUTES = ["/login", "/signup", "/onboarding"];
 

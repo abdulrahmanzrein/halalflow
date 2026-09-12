@@ -27,9 +27,42 @@ describe("normalizeProviders", () => {
         transfer_fee: 52.67,
         markup_pct: 0,
         quoted_at: undefined,
+        provider_type: undefined,
         logo: undefined,
       },
     ]);
+  });
+
+  it("captures the provider type, which decides who routes through correspondents", () => {
+    const bank = {
+      name: "Barclays",
+      alias: "barclays",
+      type: "bank",
+      quotes: [
+        {
+          rate: 1.3379905096,
+          fee: 0,
+          receivedAmount: 60209.57,
+          isConsideredMidMarketRate: false,
+          markup: 1.05450105,
+          dateCollected: "2026-09-04T18:07:51Z",
+        },
+      ],
+      logos: {},
+    };
+    const [out] = normalizeProviders([bank]);
+    expect(out.provider_type).toBe("bank");
+  });
+
+  it("leaves provider type undefined when the API does not report one", () => {
+    const unknown = {
+      name: "Unknown",
+      alias: "unknown",
+      quotes: [{ rate: 1.6, fee: 0, receivedAmount: 19000 }],
+      logos: {},
+    };
+    const [out] = normalizeProviders([unknown]);
+    expect(out.provider_type).toBeUndefined();
   });
 
   it("captures the FX markup and quote date, which the fee alone hides", () => {

@@ -2,7 +2,9 @@
 import { useState, useEffect } from "react";
 import { MOCK_PROFILE, SAMPLE } from "@/lib/fixtures";
 import { useFlows } from "./use-flows";
+import { useUser } from "./use-user";
 import { daysUntilDue } from "@/lib/flows/flow";
+import { buildCostBreakdown, impliedRevenue } from "@/lib/cost";
 import type { FXRate, ProviderQuote, RiskResult } from "@/types";
 
 export interface AppData {
@@ -22,6 +24,10 @@ export interface AppData {
   rateSource: string;
   // Cost
   trueCostToday: number;
+  /** Customer quote implied by invoice-day rate × (1 + target margin). */
+  revenue: number;
+  /** (revenue − true cost) / revenue × 100. */
+  marginToday: number;
   // Providers
   providers: ProviderQuote[];
   bestProvider: ProviderQuote;
@@ -60,6 +66,8 @@ function buildFallback(inv: {
     ecbRateInvoiceDay: SAMPLE.ecbRateInvoiceDay,
     rateSource: "ECB / Frankfurter",
     trueCostToday: Math.round(inv.amount * SAMPLE.ecbRateToday),
+    revenue: impliedRevenue(inv.amount, SAMPLE.ecbRateInvoiceDay, MOCK_PROFILE.target_margin),
+    marginToday: SAMPLE.marginToday,
     providers: FALLBACK_PROVIDERS,
     bestProvider:  { name: SAMPLE.bestProvider.name,  received: SAMPLE.bestProvider.received,  mid_market: true  },
     worstProvider: { name: SAMPLE.worstProvider.name, received: SAMPLE.worstProvider.received, mid_market: false },
@@ -89,6 +97,8 @@ function shortDay(iso: string) {
 
 export function useAppData(): AppData {
   const { current, ready } = useFlows();
+  const user = useUser();
+  const targetMargin = user.profile?.target_margin ?? MOCK_PROFILE.target_margin;
 
   const [data, setData] = useState<AppData>(() => ({
     ...buildFallback({
@@ -132,11 +142,16 @@ export function useAppData(): AppData {
         const providers: ProviderQuote[] = await provRes.json();
         const risk: RiskResult    = await riskRes.json();
 
-        const trueCostToday = Math.round(inv * fx.rate);
-        const best   = providers[0];
-        const worst  = providers[providers.length - 1];
-        const saving = best ? Math.round(best.received - worst.received) : 0;
-        const margin5pct = -(inv * fx.rate * 0.05);
+        if (providers.length === 0) throw new Error("no providers");
+
+        const invoiceDayRate = fx.rate_invoice_day > 0 ? fx.rate_invoice_day : fx.rate;
+        const revenue = impliedRevenue(inv, invoiceDayRate, targetMargin);
+        const cost = buildCostBreakdown({
+          invoiceAmount: inv,
+          revenue,
+          ecbRateToday: fx.rate,
+          providers,
+        });
 
         let rateHistory: { day: string; rate: number }[] = [];
         if (histRes.ok) {
@@ -159,15 +174,17 @@ export function useAppData(): AppData {
           ecbRateToday:      fx.rate,
           ecbRateInvoiceDay: fx.rate_invoice_day,
           rateSource:        fx.source,
-          trueCostToday,
-          providers,
-          bestProvider:  best  ?? FALLBACK_PROVIDERS[0],
-          worstProvider: worst ?? FALLBACK_PROVIDERS[FALLBACK_PROVIDERS.length - 1],
-          savingVsWorst: saving,
+          trueCostToday: cost.true_cost_today,
+          revenue: cost.revenue,
+          marginToday: cost.margin_today,
+          providers: cost.providers,
+          bestProvider: cost.best_provider,
+          worstProvider: cost.worst_provider,
+          savingVsWorst: cost.saving_vs_worst,
           driftTodayPct: risk.drift_today_pct,
           worst5pctMove: risk.worst_5pct_move,
           histWindows:   risk.hist_windows,
-          marginAtRiskMinus5pct: Math.round(margin5pct),
+          marginAtRiskMinus5pct: cost.margin_at_risk_minus5pct,
           decision:       risk.decision,
           decisionReason: risk.decision_reason,
           rateHistory,
@@ -178,7 +195,7 @@ export function useAppData(): AppData {
     }
 
     load();
-  }, [ready, current.amount, current.currency, current.home_currency, current.due_on, current.invoiced_on, current.label]);
+  }, [ready, current.amount, current.currency, current.home_currency, current.due_on, current.invoiced_on, current.label, targetMargin]);
 
   return data;
 }
