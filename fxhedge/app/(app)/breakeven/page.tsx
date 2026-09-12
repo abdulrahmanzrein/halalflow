@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { currencySymbol, MOCK_PROFILE } from "@/lib/fixtures";
 import { useAppData } from "@/hooks/use-app-data";
 import { useUser } from "@/hooks/use-user";
+import { useFlows } from "@/hooks/use-flows";
+import { NaturalHedgeCard } from "@/components/natural-hedge-card";
 import { usePageFade } from "@/components/page-fade";
 
 interface BreakevenData {
@@ -15,18 +17,6 @@ interface BreakevenData {
   hist_windows: number;
   /** Typical bad-stretch move over comparable historical windows (%) — powers the plain-language room sentence. */
   history_5pct: number;
-}
-
-interface HedgeMatch {
-  currency: string;
-  netted_amount: number;
-  suggestion: string;
-}
-interface HedgeData {
-  matches: HedgeMatch[];
-  unmatched: { currency: string; amount: number; label: string }[];
-  summary: string;
-  disclaimer: string;
 }
 
 function Skeleton({ className }: { className?: string }) {
@@ -42,6 +32,7 @@ const VERDICT = {
 export default function BreakevenPage() {
   const d = useAppData();
   const user = useUser();
+  const { flows } = useFlows();
   const sym = currencySymbol(d.toCurrency);
   const pair = `${d.fromCurrency}-${d.toCurrency}`;
   const { fade } = usePageFade();
@@ -53,7 +44,6 @@ export default function BreakevenPage() {
   const targetMargin = user.profile?.target_margin ?? MOCK_PROFILE.target_margin;
   const revenue = Math.round(d.invoiceAmount * pricingRate * (1 + targetMargin / 100) * 100) / 100;
   const [be, setBe]       = useState<BreakevenData | null>(null);
-  const [hedge, setHedge] = useState<HedgeData | null>(null);
   const [beErr, setBeErr] = useState(false);
 
   useEffect(() => {
@@ -63,11 +53,6 @@ export default function BreakevenPage() {
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then(setBe)
       .catch(() => setBeErr(true));
-
-    fetch("/api/natural-hedge")
-      .then((r) => r.ok ? r.json() : null)
-      .then((h) => h && setHedge(h))
-      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.loading, user.loading, user.profile, pair, d.invoiceAmount, d.ecbRateInvoiceDay, d.ecbRateToday]);
 
@@ -170,35 +155,9 @@ export default function BreakevenPage() {
       </div>
 
       {/* Natural hedge detector */}
-      {hedge && hedge.matches.length > 0 && (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6" style={fade(3)}>
-          <h2 className="font-semibold text-[var(--color-fg)] mb-1">Natural hedge detector</h2>
-          <p className="text-sm text-[var(--color-muted-fg)] mb-4">{hedge.summary}</p>
-          <div className="space-y-3">
-            {hedge.matches.map((m) => (
-              <div key={m.currency} className="rounded-xl border border-[var(--color-border)] p-4">
-                <p className="font-semibold text-[var(--color-fg)] text-sm">
-                  <span className="font-money tabular">{m.netted_amount.toLocaleString()} {m.currency}</span> offsets opposite flows
-                </p>
-                <p className="mt-1 text-xs text-[var(--color-muted-fg)]">{m.suggestion}</p>
-              </div>
-            ))}
-          </div>
-          {hedge.unmatched.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs font-medium text-[var(--color-muted-fg)] mb-2">Unmatched flows</p>
-              <div className="space-y-1">
-                {hedge.unmatched.map((u) => (
-                  <p key={u.label} className="text-xs text-[var(--color-muted-fg)]">
-                    {u.label}: <span className="font-money tabular">{u.amount.toLocaleString()} {u.currency}</span>. No offsetting flow found.
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
-          <p className="mt-4 text-xs text-[var(--color-muted-fg)] italic">{hedge.disclaimer}</p>
-        </div>
-      )}
+      <div style={fade(3)}>
+        <NaturalHedgeCard flows={flows} />
+      </div>
 
       <p className="text-xs text-[var(--color-muted-fg)]">
         HalalFlow never moves money and never predicts exchange rates. This is education only, not financial advice.
